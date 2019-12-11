@@ -202,14 +202,21 @@ class Integerizer(object):
             return self._getIndex(obj)
         except KeyError:
             if add:
-                return self.add(obj)
+                return self.append(obj)
             else:
                 return None
 
     def add(self, obj):
         """ Add the object if it is not already in the collection.
 
-        Similar to `set.add` (or `list.append`).
+        Similar to `set.add`.
+        """
+        return self.index(obj, add=True)
+
+    def append(self, obj):
+        """ Append the object, regardless of whether it is already in the collection.
+
+        Similar to `list.append`.
         """
         self._objects.append(obj)
         self._indices[obj] = len(self) - 1
@@ -229,16 +236,21 @@ class UnhashableIntegerizer(Integerizer):
 
     def _getIndex(self, obj):
         """ This method emulates a dict, but actually just does list lookups. """
+        # for i, candidate in enumerate(self._objects):
+        #     if obj == candidate:
+        #         return i
+        # else:
+        #     raise KeyError
         try:
-            return self._objects.find(obj)
+            return self._objects.index(obj)
         except ValueError:
             # Make this list lookup raise errors like a dict
             raise KeyError
 
-    def add(self, obj):
-        """ Add the object if it is not already in the collection.
+    def append(self, obj):
+        """ Append the object, regardless of whether it is already in the collection.
 
-        Similar to `set.add` (or `list.append`).
+        Similar to `list.append`.
         """
         self._objects.append(obj)
         return len(self) - 1
