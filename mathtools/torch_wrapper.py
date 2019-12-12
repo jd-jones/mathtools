@@ -1,19 +1,97 @@
-import torch
+import sys
+import functools
 
+import numpy as np
+import torch
 from torch import (
-    zeros, zeros_like, ones, ones_like,
     arange, meshgrid,
-    eye, diag,
+    diag,
     any, all, sum,
-    cos, sin, arctan2, radians,
-    floor, ceil
+    cos, sin,
+    floor, ceil,
+    cross, dot
 )
 
-# TODO: diff, cross, dot, logical_not, append
+import kornia
+
+
+THIS_MODULE = sys.modules[__name__]
+
+
+DEFAULT_DEVICE = None
+
+
+# TODO: logical_not, append
+
+
+def ensure_tensor(func):
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except TypeError:
+            args = tuple(array(a) for a in args)
+            return func(*args, **kwargs)
+    return wrapped
 
 
 def array(obj):
-    return torch.tensor(obj)
+    return torch.tensor(obj, device=DEFAULT_DEVICE)
+
+
+def zeros(*args, **kwargs):
+    return torch.zeros(*args, **kwargs, device=DEFAULT_DEVICE)
+
+
+def zeros_like(*args, **kwargs):
+    return torch.zeros_like(*args, **kwargs, device=DEFAULT_DEVICE)
+
+
+def ones(*args, **kwargs):
+    return torch.zeros(*args, **kwargs, device=DEFAULT_DEVICE)
+
+
+def ones_like(*args, **kwargs):
+    return torch.zeros_like(*args, **kwargs, device=DEFAULT_DEVICE)
+
+
+def eye(*args, **kwargs):
+    return torch.eye(*args, **kwargs, device=DEFAULT_DEVICE)
+
+
+def loadtxt(fn, **kwargs):
+    a = np.loadtxt(fn, **kwargs)
+    return array(a)
+
+
+def diff(a, n=1, axis=-1, prepend=None, append=None):
+    if n != 1:
+        raise NotImplementedError()
+
+    if prepend is not None:
+        raise NotImplementedError()
+
+    if append is not None:
+        raise NotImplementedError()
+
+    if axis == 0:
+        return a[1:] - a[:-1]
+    elif axis == -1:
+        return a[..., 1:] - a[..., :-1]
+    else:
+        raise NotImplementedError()
+
+
+def ravel(a):
+    # FIXME: this never copies to contiguous memory, which might be necessary.
+    return a.view(-1)
+
+
+def radians(x):
+    if not isinstance(x, torch.Tensor):
+        x = torch.tensor(x, dtype=torch.float)
+
+    return kornia.conversions.deg2rad(x)
 
 
 def hstack(arrays):
@@ -50,6 +128,10 @@ def pinv(array):
 
 def transpose(array):
     return array.transpose(0, 1)
+
+
+def arctan2(x):
+    return torch.atan2(x)
 
 
 # Replicate numpy's linalg submodule

@@ -17,4 +17,15 @@ def set_backend(name):
         raise AssertionError(err_str)
 
 
+def set_default_device(device):
+    """
+
+    Parameters
+    ----------
+    device : torch.device
+    """
+
+    np.DEFAULT_DEVICE = device
+
+
 set_backend('numpy')
