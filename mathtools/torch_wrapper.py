@@ -48,11 +48,11 @@ def zeros_like(*args, **kwargs):
 
 
 def ones(*args, **kwargs):
-    return torch.zeros(*args, **kwargs, device=DEFAULT_DEVICE)
+    return torch.ones(*args, **kwargs, device=DEFAULT_DEVICE)
 
 
 def ones_like(*args, **kwargs):
-    return torch.zeros_like(*args, **kwargs, device=DEFAULT_DEVICE)
+    return torch.ones_like(*args, **kwargs, device=DEFAULT_DEVICE)
 
 
 def eye(*args, **kwargs):
