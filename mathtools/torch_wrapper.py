@@ -5,11 +5,9 @@ import numpy as np
 import torch
 from torch import (
     arange, meshgrid,
-    diag,
-    any, all, sum,
-    cos, sin,
+    diag, einsum, sum, unique,
+    cos, sin, cross, dot,
     floor, ceil,
-    cross, dot
 )
 
 import kornia
@@ -33,6 +31,14 @@ def ensure_tensor(func):
             args = tuple(array(a) for a in args)
             return func(*args, **kwargs)
     return wrapped
+
+
+def any(x):
+    return x.byte().any()
+
+
+def all(x):
+    return x.byte().all()
 
 
 def array(obj):
