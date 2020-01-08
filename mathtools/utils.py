@@ -11,7 +11,10 @@ from collections import deque
 
 from matplotlib import pyplot as plt
 import numpy as np
+import torch
 import joblib
+
+import mathtools as m
 
 
 logger = logging.getLogger(__name__)
@@ -277,7 +280,7 @@ def dfs(start_index, edges, visited=None):
     """
 
     if visited is None:
-        visited = np.zeros(edges.shape[0], bool)
+        visited = m.np.zeros(edges.shape[0], bool)
 
     stack = [start_index]
 
@@ -312,7 +315,7 @@ def bfs(start_index, edges, visited=None):
     """
 
     if visited is None:
-        visited = np.zeros(edges.shape[0], bool)
+        visited = m.np.zeros(edges.shape[0], bool)
 
     queue = deque
     queue.appendleft(start_index)
@@ -404,7 +407,7 @@ def nearestIndexSorted(sequence, val):
         Index of the item in `sequence` which is closest to `val` in absolute value.
     """
 
-    idx = np.searchsorted(sequence, val, side="left")
+    idx = m.np.searchsorted(sequence, val, side="left")
     prev_idx = idx - 1
 
     if idx == 0:
@@ -474,7 +477,7 @@ def signalEdges(sequence, edge_type=None):
         Indices of edges in the input.
     """
 
-    difference = np.diff(sequence.astype(int))
+    difference = m.np.diff(sequence.astype(int))
 
     if edge_type is None:
         is_edge = difference != 0
@@ -503,14 +506,14 @@ def arrayMatchesAny(source_array, target_set):
     """
 
     matches_single_target = (source_array == target for target in target_set)
-    matches_any = functools.reduce(np.logical_or, matches_single_target)
+    matches_any = functools.reduce(m.np.logical_or, matches_single_target)
     return matches_any
 
 
 def isEmpty(obj):
     """ Check if an object is empty. The object could be a numpy array,
     an iterable object, etc. """
-    if isinstance(obj, np.ndarray):
+    if isinstance(obj, m.np.ndarray):
         return not obj.any()
     return not obj
 
@@ -547,7 +550,7 @@ def drawRandomSample(samples, sample_times, start_time, end_time):
     start_index = nearestIndex(sample_times, start_time, seq_sorted=True)
     end_index = nearestIndex(sample_times, end_time, seq_sorted=True)
 
-    sample_index = np.random.randint(start_index, end_index + 1)
+    sample_index = m.np.random.randint(start_index, end_index + 1)
     return samples[sample_index]
 
 
@@ -659,14 +662,14 @@ def extractWindows(signal, window_size=10, return_window_indices=False):
     """
 
     tail_len = signal.shape[0] % window_size
-    pad_arr = np.full(window_size - tail_len, np.nan)
-    signal_padded = np.concatenate((signal, pad_arr))
+    pad_arr = m.np.full(window_size - tail_len, m.np.nan)
+    signal_padded = m.np.concatenate((signal, pad_arr))
     windows = signal_padded.reshape((-1, window_size))
 
     if not return_window_indices:
         return windows
 
-    indices = np.arange(signal_padded.shape[0])
+    indices = m.np.arange(signal_padded.shape[0])
     window_indices = indices.reshape((-1, window_size))
 
     return windows, window_indices
@@ -857,12 +860,12 @@ def nanargmax(signal, axis=1):
         raise NotImplementedError(err_str)
 
     # Determine which rows contain all NaN
-    row_is_all_nan = np.isnan(signal).all(axis=1)
-    non_nan_row_idxs = np.nonzero(~row_is_all_nan)[0]
+    row_is_all_nan = m.np.isnan(signal).all(axis=1)
+    non_nan_row_idxs = m.np.nonzero(~row_is_all_nan)[0]
 
     # Find the (non-NaN) argmax of each row with at least one non-NaN value
     non_nan_rows = signal[~row_is_all_nan, :]
-    non_nan_argmax = np.nanargmax(non_nan_rows, axis=1)
+    non_nan_argmax = m.np.nanargmax(non_nan_rows, axis=1)
 
     return non_nan_row_idxs, non_nan_argmax
 
@@ -879,7 +882,7 @@ def argmaxNd(array):
     argmax : tuple(int), length-k
     """
 
-    argmax = np.unravel_index(array.argmax(), array.shape)
+    argmax = m.np.unravel_index(array.argmax(), array.shape)
     return argmax
 
 
@@ -895,14 +898,14 @@ def safeDivide(numerator, denominator):
     -------
     quotient : float
         ``numerator / denominator``. If both `numerator` and `denominator` are
-        zero, returns 0. If only `denominator` is zero, returns ``np.inf``.
+        zero, returns 0. If only `denominator` is zero, returns ``m.np.inf``.
     """
 
     if not numerator and not denominator:
         return 0
 
     if not denominator:
-        return np.inf
+        return m.np.inf
 
     return numerator / denominator
 
@@ -912,7 +915,7 @@ def boolarray2int(array):
 
 
 def int2boolarray(integer, num_objects):
-    bool_array = np.zeros(num_objects, dtype=bool)
+    bool_array = m.np.zeros(num_objects, dtype=bool)
 
     bool_list = []
     while integer:
@@ -939,8 +942,10 @@ def roundToInt(X):
     rounded : numpy array of int
     """
 
-    rounded = np.rint(X).astype(int)
-    return rounded
+    if isinstance(X, np.ndarray):
+        return m.np.rint(X).astype(int)
+    if isinstance(X, torch.Tensor):
+        return m.np.rint(X).int()
 
 
 def splitColumns(X):
@@ -949,11 +954,11 @@ def splitColumns(X):
         raise ValueError(err_str)
 
     num_cols = X.shape[1]
-    return np.hsplit(X, num_cols)
+    return m.np.hsplit(X, num_cols)
 
 
 def sampleRows(X, num_samples):
-    sample_indices = np.random.randint(0, X.shape[0], size=num_samples)
+    sample_indices = m.np.random.randint(0, X.shape[0], size=num_samples)
     return X[sample_indices, :]
 
 

@@ -27,5 +27,8 @@ def set_default_device(device):
 
     np.DEFAULT_DEVICE = device
 
+    np.pi = np.pi.to(device=device)
+    np.inf = np.inf.to(device=device)
+
 
 set_backend('numpy')
