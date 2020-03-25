@@ -111,7 +111,11 @@ def predictBatch(model, batch_input, device=None, as_numpy=False):
             preds = preds.cpu().numpy()
         except AttributeError:
             preds = tuple(p.cpu().numpy() for p in preds)
-        outputs = outputs.cpu().detach().numpy()
+        try:
+            outputs = outputs.cpu().detach().numpy()
+        except AttributeError:
+            # outputs can be a non-Tensor structure, like an FST object
+            pass
 
     return preds, outputs
 
@@ -120,7 +124,8 @@ def predictSamples(
         model, data_loader,
         criterion=None, optimizer=None, scheduler=None, data_labeled=False,
         update_model=False, device=None, update_interval=None,
-        num_minibatches=None, metrics=None, return_io_history=False):
+        num_minibatches=None, metrics=None, return_io_history=False,
+        seq_as_batch=False):
     """ Use a model to predict samples from a dataset; can also update model.
 
     Parameters
@@ -198,9 +203,15 @@ def predictSamples(
 
             preds, scores = predictBatch(model, inputs, device=device)
 
+            if seq_as_batch:
+                preds = preds[0]
+                scores = scores[0]
+                labels = labels[0]
+
             if criterion is not None:
                 labels = labels.to(device=device)
                 loss = criterion(scores, labels)
+                # import pdb; pdb.set_trace()
                 if update_model:
                     optimizer.zero_grad()
                     loss.backward()
@@ -214,7 +225,7 @@ def predictSamples(
                 io_history.append(batch_io)
 
             # FIXME: This will only count the first sequence in a minibatch
-            if metrics:
+            if False:  # metrics:
                 try:
                     preds = preds.cpu().numpy().squeeze()
                 except AttributeError:
@@ -230,7 +241,8 @@ def predictSamples(
 def trainModel(
         model, criterion, optimizer, scheduler, train_loader, val_loader=None,
         num_epochs=25, train_epoch_log=None, val_epoch_log=None, device=None,
-        update_interval=None, metrics=None, test_metric=None, improvement_thresh=0):
+        update_interval=None, metrics=None, test_metric=None, improvement_thresh=0,
+        seq_as_batch=False):
     """ Train a PyTorch model.
 
     Parameters
@@ -281,7 +293,7 @@ def trainModel(
             model, train_loader,
             criterion=criterion, optimizer=optimizer, scheduler=scheduler,
             device=device, metrics=metrics, data_labeled=True,
-            update_model=True
+            update_model=True, seq_as_batch=seq_as_batch
         )
 
         for metric_name, metric in metrics.items():
@@ -296,6 +308,7 @@ def trainModel(
                 model, val_loader,
                 criterion=criterion, device=device,
                 metrics=metrics, data_labeled=True, update_model=False,
+                seq_as_batch=seq_as_batch
             )
 
             for metric_name, metric in metrics.items():
@@ -421,6 +434,10 @@ class LinearClassifier(torch.nn.Module):
     def forward(self, input_seq):
         output_seq = self.linear(input_seq)
         return output_seq
+
+    def predict(self, outputs):
+        __, preds = torch.max(outputs, -1)
+        return preds
 
 
 def conv2dOutputShape(

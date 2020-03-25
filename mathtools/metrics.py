@@ -1,5 +1,6 @@
 import logging
 
+import torch
 import numpy as np
 from sklearn import metrics
 
@@ -149,6 +150,10 @@ class Accuracy(ConfusionPerformanceMetric):
 
 
 def truePositives(predicted, true):
+    if isinstance(predicted, torch.Tensor) and isinstance(true, torch.Tensor):
+        gt_is_positive = true != 0
+        true_positives = predicted[gt_is_positive] == true[gt_is_positive]
+        return true_positives.sum().float()
     try:
         return sum(p == t for p, t in zip(predicted, true) if t)
     except TypeError:
@@ -156,6 +161,10 @@ def truePositives(predicted, true):
 
 
 def trueNegatives(predicted, true):
+    if isinstance(predicted, torch.Tensor) and isinstance(true, torch.Tensor):
+        gt_is_negative = true == 0
+        true_negatives = predicted[gt_is_negative] == true[gt_is_negative]
+        return true_negatives.sum().float()
     try:
         return sum(p == t for p, t in zip(predicted, true) if not t)
     except TypeError:
@@ -163,6 +172,10 @@ def trueNegatives(predicted, true):
 
 
 def falsePositives(predicted, true):
+    if isinstance(predicted, torch.Tensor) and isinstance(true, torch.Tensor):
+        gt_is_positive = true != 0
+        false_positives = predicted[gt_is_positive] != true[gt_is_positive]
+        return false_positives.sum().float()
     try:
         return sum(p != t for p, t in zip(predicted, true) if t)
     except TypeError:
@@ -170,6 +183,10 @@ def falsePositives(predicted, true):
 
 
 def falseNegatives(predicted, true):
+    if isinstance(predicted, torch.Tensor) and isinstance(true, torch.Tensor):
+        gt_is_negative = true == 0
+        false_negatives = predicted[gt_is_negative] != true[gt_is_negative]
+        return false_negatives.sum().float()
     try:
         return sum(p != t for p, t in zip(predicted, true) if not t)
     except TypeError:
