@@ -132,6 +132,172 @@ def setupExceptionHandler():
         sys.excepthook = exceptionHandler
 
 
+# -=( CROSS VALIDATION )==-----------------------------------------------------
+def makeDataSplitFromRatio(*data, test_ratio=0.2, val_ratio=None):
+    """ Split data into train, test, and validation sets using provided data ratios.
+
+    Parameters
+    ----------
+    data : iterable
+        Each argument should be an iterable of data.
+    test_ratio : float, optional
+        Proportion of the data that should be used as the test set.
+    val_ratio : float, optional
+        Proportion of the data that should be used as the validation set.
+    test_set : int, optional
+        Indices of data samples in the test set. Useful for leave-one-out cross
+        validation.
+    val_size : int, optional
+        Indices of data samples in the validation set.
+
+    Returns
+    -------
+    train_set : tuple(data)
+        Data samples to use for training.
+    val_set : tuple(data)
+        Data samples to use for validation.
+    test_set : tuple(data)
+        Data samples to use for testing.
+    """
+
+    num_samples = len(data[0])
+
+    indicators = makeExptSplits(num_samples, test_ratio, val_ratio)
+
+    def selectData(data, indices):
+        if isinstance(data, np.ndarray):
+            return data[indices]
+        else:
+            return filterSeqs(data, indices)
+
+    data_splits = tuple(
+        tuple(selectData(d, ind) for ind in indicators)
+        for d in data
+    )
+
+    return tuple(zip(*data_splits))
+
+
+def makeDataSplitFromSets(*data, test_set, val_set=None):
+    """ Split data into train, test, and validation sets using a provided test set.
+
+    Parameters
+    ----------
+    data : iterable
+        Each argument should be an iterable of data.
+    test_ratio : float, optional
+        Proportion of the data that should be used as the test set.
+    val_ratio : float, optional
+        Proportion of the data that should be used as the validation set.
+    test_set : int, optional
+        Indices of data samples in the test set. Useful for leave-one-out cross
+        validation.
+    val_size : int, optional
+        Indices of data samples in the validation set.
+
+    Returns
+    -------
+    train_set : tuple(data)
+        Data samples to use for training.
+    val_set : tuple(data)
+        Data samples to use for validation.
+    test_set : tuple(data)
+        Data samples to use for testing.
+    """
+
+    num_samples = len(data[0])
+
+    idxs = np.arange(num_samples)
+    is_test = arrayMatchesAny(idxs, test_set)
+    is_train = np.logical_not(is_test)
+    is_val = np.zeros(num_samples, dtype=bool)
+    indicators = (is_train, is_val, is_test)
+
+    data_splits = tuple(
+        tuple(filterSeqs(d, ind) for ind in indicators)
+        for d in data
+    )
+    return tuple(zip(*data_splits))
+
+
+def makeDataSplits(*data, test_ratio=None, val_ratio=None, loo_cv=False):
+    """ Splits data into cross-validation folds.
+
+    Parameters
+    ----------
+    data : iterable
+        Each argument should be an iterable of data.
+    test_ratio : float, optional
+        Proportion of the data that should be used as the test set.
+    val_ratio : float, optional
+        Proportion of the data that should be used as the validation set.
+    loo_cv : bool, optional
+        Leave-one-out cross-validation mode. If True, returns N splits, each
+        with a training set of size N-1, a test set of size 1, and an empty
+        validation set.
+
+    Returns
+    -------
+    data_splits : tuple( tuple(data) )
+        Each element of `data_splits` is tuple of data that represents a
+        particular cross-validation fold. In other words,
+        `data_splits[i] = (train_set_i, val_set_i, test_set_i)`
+    """
+
+    if test_ratio and loo_cv:
+        err_str = "Only one of `(test_ratio, loo_cv)` can be set!"
+        raise ValueError(err_str)
+
+    if loo_cv:
+        num_samples = len(data[0])
+        data_splits = tuple(
+            makeDataSplitFromSets(*data, test_set=[i])
+            for i in range(num_samples)
+        )
+    else:
+        data_splits = (
+            makeDataSplitFromRatio(*data, test_ratio=test_ratio, val_ratio=val_ratio),
+        )
+
+    return data_splits
+
+
+def makeExptSplits(num_samples, test_ratio, val_ratio=None):
+    sample_idxs = np.arange(num_samples)
+    np.random.shuffle(sample_idxs)
+
+    num_test_samples = int(num_samples * test_ratio)
+    is_test = isInSplit(sample_idxs, num_test_samples)
+    offset = num_test_samples
+
+    if val_ratio is not None:
+        num_val_samples = int(num_samples * val_ratio)
+        is_val = isInSplit(sample_idxs, num_val_samples, offset)
+        offset += num_val_samples
+
+    is_train = isInSplit(sample_idxs, offset=offset)
+
+    if val_ratio is None:
+        return is_train, is_test
+
+    return is_train, is_val, is_test
+
+
+def isInSplit(sample_idxs, num_split_samples=None, offset=0):
+    num_samples = sample_idxs.max() + 1
+
+    if num_split_samples is None:
+        end = None
+    else:
+        end = offset + num_split_samples
+    split_idxs = sample_idxs[offset:end]
+
+    is_in_split = np.zeros(num_samples, dtype=bool)
+    is_in_split[split_idxs] = True
+
+    return is_in_split
+
+
 def validateCvFold(train_idxs, test_idxs):
     """ Raise an error if the train and test sets overlap.
 
@@ -540,9 +706,11 @@ def resampleSeq(sample_seq, sample_times, new_times):
         logger.warning(warn_str)
 
     resampled_indices = nearestIndices(sample_times, new_times)
-    resampled_seq = tuple(sample_seq[i] for i in resampled_indices)
 
-    return resampled_seq
+    if isinstance(sample_seq, np.ndarray):
+        return sample_seq[resampled_indices]
+    else:
+        return tuple(sample_seq[i] for i in resampled_indices)
 
 
 def drawRandomSample(samples, sample_times, start_time, end_time):
@@ -646,6 +814,55 @@ def select(indices, sequence):
     return drawSamples(sequence, indices)
 
 
+def slidingWindow(signal, window_len, stride_len=1, axis=-1, padding=None):
+    """ Create a tensor representing a sliding window over the input signal.
+
+    Parameters
+    ----------
+    signal : numpy array, shape (..., num_samples)
+    window_len : int
+    stride_len : int, optional
+    padding : {'reflect', 'zero', None}, optional
+
+    Returns
+    -------
+    windows : numpy array, shape (..., num_samples, num_windows)
+    """
+
+    if not window_len % 2:
+        raise NotImplementedError('Only odd-length windows are currently supported')
+
+    if stride_len != 1:
+        raise NotImplementedError('Only unit stride is currently supported')
+
+    if axis != -1:
+        signal = np.moveaxis(signal, axis, -1)
+        windows = slidingWindow(
+            signal, window_len,
+            stride_len=stride_len, axis=-1, padding=padding
+        )
+        return np.moveaxis(windows, -2, axis)
+
+    if padding == 'reflect':
+        half_window = window_len // 2
+        pre_padding = signal[..., half_window:0:-1]
+        post_padding = signal[..., -2:-2 - half_window:-1]
+        signal = np.concatenate((pre_padding, signal, post_padding), axis=-1)
+    elif padding == 'zero':
+        padding = np.zeros_like(signal[..., :half_window])
+        signal = np.concatenate((padding, signal, padding), axis=-1)
+    elif padding is not None:
+        raise ValueError('argument "padding={padding}" is not supported')
+
+    shape = signal.shape[:-1] + (signal.shape[-1] - window_len + 1, window_len)
+    strides = signal.strides + (signal.strides[-1],)
+    windows = np.lib.stride_tricks.as_strided(
+        signal, shape=shape, strides=strides,
+        writeable=False
+    )
+    return windows
+
+
 def extractWindows(signal, window_size=10, return_window_indices=False):
     """ Reshape a signal into a series of non-overlapping windows.
 
@@ -673,6 +890,16 @@ def extractWindows(signal, window_size=10, return_window_indices=False):
     window_indices = indices.reshape((-1, window_size))
 
     return windows, window_indices
+
+
+def computeSampleTimes(sample_rate, start_time, end_time):
+    sample_period = 1 / sample_rate
+
+    # np.arange can sometimes return values beyond end_time
+    sample_times = np.arange(start_time, end_time, sample_period)
+    sample_times = sample_times[sample_times <= end_time]
+
+    return sample_times
 
 
 # --=( FUNCTIONAL PROGRAMMING )=-----------------------------------------------
@@ -960,6 +1187,25 @@ def splitColumns(X):
 def sampleRows(X, num_samples):
     sample_indices = m.np.random.randint(0, X.shape[0], size=num_samples)
     return X[sample_indices, :]
+
+
+def isUnivariate(signal):
+    """ Returns True if `signal` contains univariate samples.
+
+    Parameters
+    ----------
+    signal : np.array, shape (NUM_SAMPLES, NUM_DIMS)
+
+    Returns
+    -------
+    is_univariate : bool
+    """
+
+    if len(signal.shape) == 1:
+        return True
+    if signal.shape[1] > 1:
+        return False
+    return True
 
 
 # --=( I/O )=------------------------------------------------------------------

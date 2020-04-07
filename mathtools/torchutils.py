@@ -282,7 +282,7 @@ def trainModel(
     model = model.to(device=device)
 
     best_model_wts = copy.deepcopy(model.state_dict())
-    best_metric = 0.0
+    best_metric = -1
 
     init_time = time.time()
     for epoch in range(num_epochs):
@@ -421,11 +421,15 @@ class ArrayDataset(torch.utils.data.Dataset):
 
 # -=( MODELS )=----------------------------------------------------------------
 class LinearClassifier(torch.nn.Module):
-    def __init__(self, input_dim, out_set_size):
+    def __init__(self, input_dim, out_set_size, binary_labels=False):
         super().__init__()
+
         self.input_dim = input_dim
         self.out_set_size = out_set_size
+        self.binary_labels = binary_labels
+
         self.linear = torch.nn.Linear(self.input_dim, self.out_set_size)
+
         logger.info(
             f'Initialized linear classifier. '
             f'Input dim: {self.input_dim}, Output dim: {self.out_set_size}'
@@ -436,6 +440,8 @@ class LinearClassifier(torch.nn.Module):
         return output_seq
 
     def predict(self, outputs):
+        if self.binary_labels:
+            return (outputs > 0.5).float()
         __, preds = torch.max(outputs, -1)
         return preds
 
