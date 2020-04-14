@@ -308,6 +308,59 @@ def countTrue(true, pred, precision='state', denom_mode='accuracy'):
             num_total = int(nonempty(true))
         # Don't count empty states in precision/recall mode
         num_true *= num_total
+    elif precision == 'topology':
+        num_true = int((pred.connections == true.connections).all())
+        if denom_mode == 'accuracy':
+            num_total = 1
+        elif denom_mode == 'precision':
+            num_total = int(nonempty(pred))
+        elif denom_mode == 'recall':
+            num_total = int(nonempty(true))
+        # Don't count empty states in precision/recall mode
+        num_true *= num_total
+    elif precision == 'subset_topo':
+        pred_minus_true = pred.connections * ~true.connections
+        true_minus_pred = true.connections * ~pred.connections
+        pred_subset_true = true_minus_pred.any() and not pred_minus_true.any()
+        num_true = int(pred_subset_true)
+        if not pred.any() and true.any():
+            num_true = 0
+        if (pred.connections == true.connections).all():
+            num_true = 1
+        if denom_mode == 'accuracy':
+            num_total = 1
+        elif denom_mode == 'precision':
+            num_total = int(nonempty(pred))
+        elif denom_mode == 'recall':
+            num_total = int(nonempty(true))
+        # don't count empty states in precision/recall mode
+        num_true *= num_total
+    elif precision == 'subset_geom':
+        num_true = int(pred <= true)
+        if not pred.any() and true.any():
+            num_true = 0
+        if denom_mode == 'accuracy':
+            num_total = 1
+        elif denom_mode == 'precision':
+            num_total = int(nonempty(pred))
+        elif denom_mode == 'recall':
+            num_total = int(nonempty(true))
+        # don't count empty states in precision/recall mode
+        num_true *= num_total
+    elif precision == 'off by one':
+        differences = (pred.symmetrized_connections ^ true.symmetrized_connections).astype(int)
+        # since arrays are symmetric, any difference results in at least two changed edges,
+        # so divide by two. Comparison is <= 2 because we're allowing one EDIT
+        # (i.e. change one edge into another)
+        num_true = int(differences.sum() / 2 <= 2)
+        if denom_mode == 'accuracy':
+            num_total = 1
+        elif denom_mode == 'precision':
+            num_total = int(nonempty(pred))
+        elif denom_mode == 'recall':
+            num_total = int(nonempty(true))
+        # don't count empty states in precision/recall mode
+        num_true *= num_total
 
     return num_true, num_total
 
