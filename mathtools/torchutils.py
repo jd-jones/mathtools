@@ -197,9 +197,9 @@ def predictSamples(
                 logger.info(f'Predicted {i} minibatches...')
 
             if data_labeled:
-                inputs, labels = sample
+                inputs, labels, ids = sample
             else:
-                inputs = sample
+                inputs, ids = sample
 
             preds, scores = predictBatch(model, inputs, device=device)
 
@@ -207,11 +207,11 @@ def predictSamples(
                 preds = preds[0]
                 scores = scores[0]
                 labels = labels[0]
+                ids = ids[0]
 
             if criterion is not None:
                 labels = labels.to(device=device)
                 loss = criterion(scores, labels)
-                # import pdb; pdb.set_trace()
                 if update_model:
                     optimizer.zero_grad()
                     loss.backward()
@@ -417,6 +417,87 @@ class ArrayDataset(torch.utils.data.Dataset):
         label = self._labels[i]
 
         return data, label
+
+
+class SequenceDataset(torch.utils.data.Dataset):
+    """ A dataset wrapping sequences of numpy arrays stored in memory.
+
+    Attributes
+    ----------
+    _data : tuple(np.ndarray, shape (num_samples, num_dims))
+    _labels : tuple(np.ndarray, shape (num_samples,))
+    _device : torch.Device
+    """
+
+    def __init__(
+            self, data, labels, device=None, labels_dtype=None, sliding_window_args=None,
+            transpose_data=False, seq_ids=None):
+        """
+        Parameters
+        ----------
+        data : iterable( array_like of float, shape (sequence_len, num_dims) )
+        labels : iterable( array_like of int, shape (sequence_len,) )
+        device :
+        labels_dtype : torch data type
+            If passed, labels will be converted to this type
+        sliding_window_args : tuple(int, int, int), optional
+            A tuple specifying parameters for extracting sliding windows from
+            the data sequences. This should be ``(dimension, size, step)``---i.e.
+            the input to ``torch.unfold``. The label of each sliding window is
+            taken to be the median over the labels in that window.
+        """
+
+        self.num_obsv_dims = data[0].shape[1]
+
+        if len(labels[0].shape) == 2:
+            # self.num_label_types = labels[0].max() + 1
+            self.num_label_types = labels[0].shape[1]
+        elif len(labels[0].shape) < 2:
+            self.num_label_types = np.unique(np.hstack(labels)).max() + 1
+        else:
+            err_str = f"Labels have a weird shape: {labels[0].shape}"
+            raise ValueError(err_str)
+
+        self.sliding_window_args = sliding_window_args
+        self.transpose_data = transpose_data
+
+        self._device = device
+        self._seq_ids = seq_ids
+
+        self._data = tuple(map(lambda x: torch.tensor(x, device=device, dtype=torch.float), data))
+        self._labels = tuple(
+            map(lambda x: torch.tensor(x, device=device, dtype=labels_dtype), labels)
+        )
+
+        logger.info('Initialized ArrayDataset.')
+        logger.info(
+            f"Data has dimension {self.num_obsv_dims}; "
+            f"{self.num_label_types} unique labels"
+        )
+
+    def __len__(self):
+        return len(self._data)
+
+    def __getitem__(self, i):
+        data_seq = self._data[i]
+        label_seq = self._labels[i]
+
+        if self._seq_ids is None:
+            seq_id = -1
+        else:
+            seq_id = self._seq_ids[i]
+
+        # shape (sequence_len, num_dims) --> (num_dims, sequence_len)
+        if self.transpose_data:
+            data_seq = data_seq.transpose(0, 1)
+
+        if self.sliding_window_args is not None:
+            # Unfold gives shape (sequence_len, window_len);
+            # after transpose, data_seq has shape (window_len, sequence_len)
+            data_seq = data_seq.unfold(*self.sliding_window_args).transpose(-1, -2)
+            label_seq = label_seq.unfold(*self.sliding_window_args).median(dim=-1).values
+
+        return data_seq, label_seq, seq_id
 
 
 # -=( MODELS )=----------------------------------------------------------------
