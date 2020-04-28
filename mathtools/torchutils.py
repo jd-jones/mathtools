@@ -5,7 +5,10 @@ import collections
 import os
 
 import torch
+import torch.nn as nn
 import torch.utils.data
+from torch.nn.utils import weight_norm
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -125,7 +128,7 @@ def predictSamples(
         criterion=None, optimizer=None, scheduler=None, data_labeled=False,
         update_model=False, device=None, update_interval=None,
         num_minibatches=None, metrics=None, return_io_history=False,
-        seq_as_batch=False):
+        label_mapping=None, seq_as_batch=False):
     """ Use a model to predict samples from a dataset; can also update model.
 
     Parameters
@@ -209,6 +212,11 @@ def predictSamples(
                 labels = labels[0]
                 ids = ids[0]
 
+            if label_mapping is not None:
+                for i, j in label_mapping.items():
+                    preds[preds == i] = j
+                    labels[labels == i] = j
+
             if criterion is not None:
                 labels = labels.to(device=device)
                 loss = criterion(scores, labels)
@@ -223,14 +231,6 @@ def predictSamples(
             if return_io_history:
                 batch_io = (preds,) + tuple(sample)
                 io_history.append(batch_io)
-
-            # FIXME: This will only count the first sequence in a minibatch
-            if False:  # metrics:
-                try:
-                    preds = preds.cpu().numpy().squeeze()
-                except AttributeError:
-                    preds = tuple(p.cpu().numpy() for p in preds)[0]
-                labels = labels.cpu().numpy().squeeze()
 
             for key, value in metrics.items():
                 metrics[key].accumulate(preds, labels, loss)
@@ -501,6 +501,81 @@ class SequenceDataset(torch.utils.data.Dataset):
 
 
 # -=( MODELS )=----------------------------------------------------------------
+class Chomp1d(nn.Module):
+    def __init__(self, chomp_size):
+        super(Chomp1d, self).__init__()
+        self.chomp_size = chomp_size
+
+    def forward(self, x):
+        return x[:, :, :-self.chomp_size].contiguous()
+
+
+class TemporalBlock(nn.Module):
+    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2):
+        super(TemporalBlock, self).__init__()
+        self.conv1 = weight_norm(
+            nn.Conv1d(
+                n_inputs, n_outputs, kernel_size,
+                stride=stride, padding=padding, dilation=dilation
+            )
+        )
+        self.chomp1 = Chomp1d(padding)
+        self.relu1 = nn.ReLU()
+        self.dropout1 = nn.Dropout(dropout)
+
+        self.conv2 = weight_norm(
+            nn.Conv1d(
+                n_outputs, n_outputs, kernel_size,
+                stride=stride, padding=padding, dilation=dilation
+            )
+        )
+        self.chomp2 = Chomp1d(padding)
+        self.relu2 = nn.ReLU()
+        self.dropout2 = nn.Dropout(dropout)
+
+        self.net = nn.Sequential(
+            self.conv1, self.chomp1, self.relu1, self.dropout1,
+            self.conv2, self.chomp2, self.relu2, self.dropout2
+        )
+        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
+        self.relu = nn.ReLU()
+        self.init_weights()
+
+    def init_weights(self):
+        self.conv1.weight.data.normal_(0, 0.01)
+        self.conv2.weight.data.normal_(0, 0.01)
+        if self.downsample is not None:
+            self.downsample.weight.data.normal_(0, 0.01)
+
+    def forward(self, x):
+        out = self.net(x)
+        res = x if self.downsample is None else self.downsample(x)
+        return self.relu(out + res)
+
+
+class TemporalConvNet(nn.Module):
+    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2):
+        super(TemporalConvNet, self).__init__()
+
+        def gen_layers(num_levels):
+            for i in range(num_levels):
+                dilation_size = 2 ** i
+                in_channels = num_inputs if i == 0 else num_channels[i - 1]
+                out_channels = num_channels[i]
+                layer = TemporalBlock(
+                    in_channels, out_channels, kernel_size,
+                    stride=1, dilation=dilation_size,
+                    padding=(kernel_size - 1) * dilation_size, dropout=dropout
+                )
+                yield layer
+
+        num_levels = len(num_channels)
+        self.network = nn.Sequential(*tuple(gen_layers(num_levels)))
+
+    def forward(self, x):
+        return self.network(x)
+
+
 class LinearClassifier(torch.nn.Module):
     def __init__(self, input_dim, out_set_size, binary_labels=False):
         super().__init__()

@@ -1137,6 +1137,57 @@ def safeDivide(numerator, denominator):
     return numerator / denominator
 
 
+def makeHistogram(
+        num_classes, samples, normalize=False, ignore_empty=True, backoff_counts=0):
+    """ Make a histogram representing the empirical distribution of the input.
+
+    Parameters
+    ----------
+    samples : numpy array of int, shape (num_samples,)
+        Array of outcome indices.
+    normalize : bool, optional
+        If True, the histogram is normalized to it sums to one (ie this
+        method returns a probability distribution). If False, this method
+        returns the class counts. Default is False.
+    ignore_empty : bool, optional
+        Can be useful when ``normalize == False`` and ``backoff_counts == 0``.
+        If True, this function doesn't try to normalize the histogram of an
+        empty input. Trying to normalize that histogram would lead to a
+        divide-by-zero error and an output of all ``NaN``.
+    backoff_counts : int or float, optional
+        This amount is added to all bins in the histogram before normalization
+        (if `normalize` is True). Non-integer backoff counts are allowed.
+
+    Returns
+    -------
+    class_histogram : numpy array of float, shape (num_clusters,)
+        Histogram representing the input data. If `normalize` is True, this is
+        a probability distribution (possibly smoothed via backoff). If not,
+        this is the number of times each cluster was encountered in the input,
+        plus any additional backoff counts.
+    """
+
+    hist = np.zeros(num_classes)
+
+    # Sometimes the input can be empty. We would rather return a vector of
+    # zeros than trying to normalize and get NaN.
+    if ignore_empty and not np.any(samples):
+        return hist
+
+    # Count occurrences of each class in the histogram
+    for index in range(num_classes):
+        class_count = np.sum(samples == index)
+        hist[index] = class_count
+
+    # Add in the backoff counts
+    hist += backoff_counts
+
+    if normalize:
+        hist /= hist.sum()
+
+    return hist
+
+
 def boolarray2int(array):
     return sum(1 << i for i, b in enumerate(array) if b)
 
@@ -1206,6 +1257,25 @@ def isUnivariate(signal):
     if signal.shape[1] > 1:
         return False
     return True
+
+
+def lower_tri(array):
+    """ Return the lower-triangular part of an array (below the main diagonal).
+
+    Parameters
+    ----------
+    array : array, shape (..., N, N) or (N, N)
+
+    Returns
+    -------
+    lower_tri : array, shape (..., N * (N - 1) / 2)
+    """
+
+    if array.shape[-1] != array.shape[-2]:
+        raise ValueError(f"Array should be square in last two dims, but has shape {array.shape}")
+
+    rows, cols = np.tril_indices(array.shape[-1], k=-1)
+    return array[..., rows, cols]
 
 
 # --=( I/O )=------------------------------------------------------------------
