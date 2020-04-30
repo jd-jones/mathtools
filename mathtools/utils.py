@@ -13,6 +13,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import torch
 import joblib
+from sklearn import model_selection
 
 import mathtools as m
 
@@ -133,6 +134,49 @@ def setupExceptionHandler():
 
 
 # -=( CROSS VALIDATION )==-----------------------------------------------------
+def makeDataSplits(dataset_size, val_ratio=None, **kwargs):
+    """ Splits data into cross-validation folds.
+
+    Parameters
+    ----------
+    data : iterable
+        Each argument should be an iterable of data.
+    test_ratio : float, optional
+        Proportion of the data that should be used as the test set.
+    val_ratio : float, optional
+        Proportion of the data that should be used as the validation set.
+    loo_cv : bool, optional
+        Leave-one-out cross-validation mode. If True, returns N splits, each
+        with a training set of size N-1, a test set of size 1, and an empty
+        validation set.
+
+    Returns
+    -------
+    data_splits : tuple( tuple(data) )
+        Each element of `data_splits` is tuple of data that represents a
+        particular cross-validation fold. In other words,
+        `data_splits[i] = (train_set_i, val_set_i, test_set_i)`
+    """
+
+    if not kwargs:
+        cv_splitter = model_selection.LeaveOneOut()
+    else:
+        cv_splitter = model_selection.KFold(**kwargs)
+
+    data_indices = np.arange(dataset_size)
+    splits = cv_splitter.split(data_indices)
+
+    if val_ratio is not None:
+        def makeVal(i_train, i_test):
+            num_val = roundToInt(val_ratio * len(i_train))
+            i_val = i_train[:num_val]
+            i_train = i_train[num_val:]
+            return i_train, i_val, i_test
+        splits = tuple(makeVal(i_train, i_test) for i_train, i_test in splits)
+
+    return splits
+
+
 def makeDataSplitFromRatio(*data, test_ratio=0.2, val_ratio=None):
     """ Split data into train, test, and validation sets using provided data ratios.
 
@@ -218,48 +262,6 @@ def makeDataSplitFromSets(*data, test_set, val_set=None):
         for d in data
     )
     return tuple(zip(*data_splits))
-
-
-def makeDataSplits(*data, test_ratio=None, val_ratio=None, loo_cv=False):
-    """ Splits data into cross-validation folds.
-
-    Parameters
-    ----------
-    data : iterable
-        Each argument should be an iterable of data.
-    test_ratio : float, optional
-        Proportion of the data that should be used as the test set.
-    val_ratio : float, optional
-        Proportion of the data that should be used as the validation set.
-    loo_cv : bool, optional
-        Leave-one-out cross-validation mode. If True, returns N splits, each
-        with a training set of size N-1, a test set of size 1, and an empty
-        validation set.
-
-    Returns
-    -------
-    data_splits : tuple( tuple(data) )
-        Each element of `data_splits` is tuple of data that represents a
-        particular cross-validation fold. In other words,
-        `data_splits[i] = (train_set_i, val_set_i, test_set_i)`
-    """
-
-    if test_ratio and loo_cv:
-        err_str = "Only one of `(test_ratio, loo_cv)` can be set!"
-        raise ValueError(err_str)
-
-    if loo_cv:
-        num_samples = len(data[0])
-        data_splits = tuple(
-            makeDataSplitFromSets(*data, test_set=[i])
-            for i in range(num_samples)
-        )
-    else:
-        data_splits = (
-            makeDataSplitFromRatio(*data, test_ratio=test_ratio, val_ratio=val_ratio),
-        )
-
-    return data_splits
 
 
 def makeExptSplits(num_samples, test_ratio, val_ratio=None):
@@ -1224,6 +1226,7 @@ def roundToInt(X):
         return m.np.rint(X).astype(int)
     if isinstance(X, torch.Tensor):
         return m.np.rint(X).int()
+    return int(round(X))
 
 
 def splitColumns(X):

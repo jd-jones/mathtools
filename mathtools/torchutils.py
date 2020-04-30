@@ -206,6 +206,10 @@ def predictSamples(
 
             preds, scores = predictBatch(model, inputs, device=device)
 
+            if return_io_history:
+                batch_io = (preds, scores) + tuple(sample)
+                io_history.append(batch_io)
+
             if seq_as_batch:
                 preds = preds[0]
                 scores = scores[0]
@@ -227,10 +231,6 @@ def predictSamples(
                 loss = loss.item()
             else:
                 loss = 0
-
-            if return_io_history:
-                batch_io = (preds,) + tuple(sample)
-                io_history.append(batch_io)
 
             for key, value in metrics.items():
                 metrics[key].accumulate(preds, labels, loss)

@@ -25,6 +25,10 @@ class RationalPerformanceMetric():
     def evaluate(self):
         return utils.safeDivide(self._numerator, self._denominator)
 
+    @property
+    def value(self):
+        return float(self.evaluate())
+
     def __str__(self):
         return f'{self.evaluate():.5f}'
 
@@ -46,9 +50,12 @@ class AverageLoss(RationalPerformanceMetric):
     def _count_denominator(self, outputs=None, labels=None, loss=None):
         return 1
 
+    @property
+    def name(self):
+        return 'loss'
+
     def __str__(self):
-        name = 'loss'
-        return name + ': ' + super().__str__()
+        return self.name + ': ' + super().__str__()
 
 
 class ConfusionPerformanceMetric(RationalPerformanceMetric):
@@ -100,9 +107,12 @@ class Fmeasure(ConfusionPerformanceMetric):
         )
         return denom
 
+    @property
+    def name(self):
+        return f'F_{self._beta}'
+
     def __str__(self):
-        name = f'F_{self._beta}'
-        return name + ': ' + super().__str__()
+        return self.name + ': ' + super().__str__()
 
 
 class Recall(ConfusionPerformanceMetric):
@@ -114,9 +124,12 @@ class Recall(ConfusionPerformanceMetric):
     def _denominator(self):
         return self._true_positives + self._false_negatives
 
+    @property
+    def name(self):
+        return 'rec'
+
     def __str__(self):
-        name = 'rec'
-        return name + ': ' + super().__str__()
+        return self.name + ': ' + super().__str__()
 
 
 class Precision(ConfusionPerformanceMetric):
@@ -128,9 +141,12 @@ class Precision(ConfusionPerformanceMetric):
     def _denominator(self):
         return self._true_positives + self._false_positives
 
+    @property
+    def name(self):
+        return 'prc'
+
     def __str__(self):
-        name = 'prc'
-        return name + ': ' + super().__str__()
+        return self.name + ': ' + super().__str__()
 
 
 class Accuracy(ConfusionPerformanceMetric):
@@ -144,9 +160,12 @@ class Accuracy(ConfusionPerformanceMetric):
         data_negatives = self._false_positives + self._true_negatives
         return data_positives + data_negatives
 
+    @property
+    def name(self):
+        return 'acc'
+
     def __str__(self):
-        name = 'acc'
-        return name + ': ' + super().__str__()
+        return self.name + ': ' + super().__str__()
 
 
 def truePositives(predicted, true):
