@@ -8,6 +8,7 @@ import collections
 import random
 import shutil
 from collections import deque
+import glob
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -131,6 +132,18 @@ def setupExceptionHandler():
     else:
         logger.info('Not in iPython -- using custom exception handler')
         sys.excepthook = exceptionHandler
+
+
+def getUniqueIds(dir_path, file_format=None):
+    if file_format is None:
+        file_format = "trial-*.pkl"
+
+    trial_ids = set(
+        int(os.path.basename(fn).split('-')[1].split('_')[0])
+        for fn in glob.glob(os.path.join(dir_path, file_format))
+    )
+
+    return np.array(sorted(tuple(trial_ids)))
 
 
 # -=( CROSS VALIDATION )==-----------------------------------------------------
