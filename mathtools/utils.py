@@ -9,6 +9,7 @@ import random
 import shutil
 from collections import deque
 import glob
+import csv
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -134,16 +135,39 @@ def setupExceptionHandler():
         sys.excepthook = exceptionHandler
 
 
-def getUniqueIds(dir_path, file_format=None):
-    if file_format is None:
-        file_format = "trial-*.pkl"
+def getUniqueIds(dir_path, prefix=None, suffix=None):
+    if prefix is None:
+        prefix = "trial-"
+    if suffix is None:
+        suffix = ".pkl"
 
     trial_ids = set(
-        int(os.path.basename(fn).split('-')[1].split('_')[0])
-        for fn in glob.glob(os.path.join(dir_path, file_format))
+        int(os.path.basename(fn).split(prefix)[1].split('_')[0])
+        for fn in glob.glob(os.path.join(dir_path, f"{prefix}*{suffix}"))
     )
 
     return np.array(sorted(tuple(trial_ids)))
+
+
+def writeResults(results_file, metric_dict, sweep_param_name, model_params):
+    rows = []
+
+    if not os.path.exists(results_file):
+        header = list(metric_dict.keys())
+        if sweep_param_name is not None:
+            header = [sweep_param_name] + header
+        rows.append(header)
+
+    row = list(metric_dict.values())
+    if sweep_param_name is not None:
+        param_val = model_params[sweep_param_name]
+        row = [param_val] + row
+    rows.append(row)
+
+    with open(results_file, 'a') as csvfile:
+        writer = csv.writer(csvfile)
+        for row in rows:
+            writer.writerow(row)
 
 
 # -=( CROSS VALIDATION )==-----------------------------------------------------
@@ -1360,3 +1384,35 @@ def copyFile(file_path, dest_dir):
     shutil.copy(file_path, dest_path)
 
     return dest_path
+
+
+# --=( VISUALIZATION )=--------------------------------------------------------
+def plot_array(inputs, labels, label_names, fn=None, tick_names=None):
+    subplot_width = 12
+    subplot_height = 3
+
+    num_axes = 1 + len(labels)
+
+    figsize = (subplot_width, num_axes * subplot_height)
+    fig, axes = plt.subplots(num_axes, figsize=figsize, sharex=True)
+
+    inputs = inputs.reshape(-1, inputs.shape[-1])
+    axes[-1].imshow(inputs, interpolation='none', aspect='auto')
+    axes[-1].set_ylabel('Input')
+
+    for i, (label, label_name) in enumerate(zip(labels, label_names)):
+        if label.ndim == 1:
+            axes[i].plot(label, label=label_name)
+        elif label.ndim == 2:
+            axes[i].imshow(label, interpolation='none', aspect='auto')
+        if tick_names is not None:
+            axes[i].set_yticks(range(len(tick_names)))
+            axes[i].set_yticklabels(tick_names)
+        axes[i].set_ylabel(label_name)
+
+    plt.tight_layout()
+    if fn is None:
+        plt.show()
+    else:
+        plt.savefig(fn)
+        plt.close()

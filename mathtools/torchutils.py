@@ -208,7 +208,7 @@ def predictSamples(
 
             if return_io_history:
                 batch_io = (preds, scores) + tuple(sample)
-                io_history.append(batch_io)
+                io_history.append(tuple(x.cpu() for x in batch_io))
 
             if seq_as_batch:
                 preds = preds[0]
@@ -486,6 +486,109 @@ class SequenceDataset(torch.utils.data.Dataset):
             seq_id = -1
         else:
             seq_id = self._seq_ids[i]
+
+        # shape (sequence_len, num_dims) --> (num_dims, sequence_len)
+        if self.transpose_data:
+            data_seq = data_seq.transpose(0, 1)
+
+        if self.sliding_window_args is not None:
+            # Unfold gives shape (sequence_len, window_len);
+            # after transpose, data_seq has shape (window_len, sequence_len)
+            data_seq = data_seq.unfold(*self.sliding_window_args).transpose(-1, -2)
+            label_seq = label_seq.unfold(*self.sliding_window_args).median(dim=-1).values
+
+        return data_seq, label_seq, seq_id
+
+
+class PickledVideoDataset(torch.utils.data.Dataset):
+    """ A dataset wrapping sequences of numpy arrays stored in memory.
+
+    Attributes
+    ----------
+    _data : tuple(np.ndarray, shape (num_samples, num_dims))
+    _labels : tuple(np.ndarray, shape (num_samples,))
+    _device : torch.Device
+    """
+
+    def __init__(
+            self, data_loader, labels, device=None, labels_dtype=None,
+            sliding_window_args=None, transpose_data=False, seq_ids=None, batch_size=None):
+        """
+        Parameters
+        ----------
+        data_loader : function
+            data_loader should take a sequence ID and return the data sample
+            corresponding to that ID --- ie an array_like of float with shape
+            (sequence_len, num_dims)
+        labels : iterable( array_like of int, shape (sequence_len,) )
+        device :
+        labels_dtype : torch data type
+            If passed, labels will be converted to this type
+        sliding_window_args : tuple(int, int, int), optional
+            A tuple specifying parameters for extracting sliding windows from
+            the data sequences. This should be ``(dimension, size, step)``---i.e.
+            the input to ``torch.unfold``. The label of each sliding window is
+            taken to be the median over the labels in that window.
+        """
+
+        if seq_ids is None:
+            raise ValueError(f"This class must be initialized with seq_ids")
+
+        if len(labels[0].shape) == 2:
+            self.num_label_types = labels[0].shape[1]
+        elif len(labels[0].shape) < 2:
+            self.num_label_types = np.unique(np.hstack(labels)).max() + 1
+        else:
+            err_str = f"Labels have a weird shape: {labels[0].shape}"
+            raise ValueError(err_str)
+
+        self.sliding_window_args = sliding_window_args
+        self.transpose_data = transpose_data
+        self.batch_size = batch_size
+
+        self._load_data = data_loader
+
+        self._device = device
+        self._seq_ids = seq_ids
+
+        self._labels = tuple(
+            map(lambda x: torch.tensor(x, device=device, dtype=labels_dtype), labels)
+        )
+
+        self._seq_lens = tuple(x.shape[0] for x in self._labels)
+
+        self.unflatten = tuple(
+            (seq_index, win_index)
+            for seq_index, seq_len in enumerate(self._seq_lens)
+            for win_index in range(0, seq_len, self.batch_size)
+        )
+
+        logger.info('Initialized ArrayDataset.')
+        logger.info(f"{self.num_label_types} unique labels")
+
+    def __len__(self):
+        if self.batch_size is None:
+            return len(self._seq_ids)
+        return len(self.unflatten)
+
+    def __getitem__(self, i):
+        if self.batch_size is not None:
+            seq_idx, win_idx = self.unflatten[i]
+
+            seq_id = self._seq_ids[seq_idx]
+            label_seq = self._labels[seq_idx]
+            data_seq = self._load_data(seq_id)
+
+            start_idx = win_idx
+            end_idx = start_idx + self.batch_size
+            data_seq = data_seq[start_idx:end_idx]
+            label_seq = label_seq[start_idx:end_idx]
+        else:
+            seq_id = self._seq_ids[i]
+            label_seq = self._labels[i]
+            data_seq = self._load_data(seq_id)
+
+        data_seq = torch.tensor(data_seq, device=self._device, dtype=torch.float)
 
         # shape (sequence_len, num_dims) --> (num_dims, sequence_len)
         if self.transpose_data:
