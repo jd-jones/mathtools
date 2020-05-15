@@ -649,8 +649,8 @@ def nearestIndices(sequence, values):
 
     Returns
     -------
-    indices : list( int )
-        List whose elements correspond to the elements in `values`.
+    indices : numpy array of int, shape (num_values,)
+        1-D array whose elements correspond to the elements in `values`.
         The i-th element of `indices` is the index of the element in `sequence`
         which is closest to the i-th element of `values` in absolute value.
     """
@@ -662,7 +662,7 @@ def nearestIndices(sequence, values):
         last_index += nearestIndex(cur_seq, val, seq_sorted=True)
         indices.append(last_index)
 
-    return indices
+    return np.array(indices)
 
 
 def signalEdges(sequence, edge_type=None):
