@@ -941,6 +941,39 @@ def computeSampleTimes(sample_rate, start_time, end_time):
     return sample_times
 
 
+def reduce_all_equal(segment):
+    if not np.all(segment == segment[0]):
+        raise AssertionError()
+    return segment[0]
+
+
+def reduce_over_segments(signal, seg_label_seq, reduction=None):
+    if reduction is None:
+        reduction = reduce_all_equal
+
+    segment_labels = np.unique(seg_label_seq)
+    num_segments = segment_labels.shape[0]
+
+    if signal.ndim == 1:
+        num_samples = signal.shape[0]
+        samples = np.zeros((num_samples,))
+        segments = np.zeros((num_segments,))
+    else:
+        num_samples, num_feats = signal.shape[:2]
+        samples = np.zeros((num_samples, num_feats))
+        segments = np.zeros((num_segments, num_feats))
+
+    for i in segment_labels:
+        in_segment = seg_label_seq == i
+
+        reduced = reduction(signal[in_segment])
+
+        samples[in_segment] = reduced
+        segments[i] = reduced
+
+    return segments, samples
+
+
 # --=( FUNCTIONAL PROGRAMMING )=-----------------------------------------------
 def mapValues(function, dictionary):
     """ Map `function` to the values of `dictionary`. """
