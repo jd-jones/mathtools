@@ -578,11 +578,6 @@ def genSegments(seq):
         yield cur_state, segment_len
 
 
-def computeSegments(seq):
-    segments, segment_lens = zip(*genSegments(seq))
-    return tuple(segments), tuple(segment_lens)
-
-
 def nearestIndex(sequence, val, seq_sorted=False):
     """ Find the index of the element in sequence closest to val. """
 
@@ -941,6 +936,25 @@ def computeSampleTimes(sample_rate, start_time, end_time):
     return sample_times
 
 
+# -=( SEGMENTS, LABELS AND STUFF)==--------------------------------------------
+def computeSegments(seq):
+    segments, segment_lens = zip(*genSegments(seq))
+    return tuple(segments), tuple(segment_lens)
+
+
+def makeSegmentLabels(label_seq):
+    seg_labels, seg_lens = computeSegments(label_seq)
+
+    seg_label_seq = np.zeros_like(label_seq)
+    start_index = 0
+    for i, seg_len in enumerate(seg_lens):
+        end_index = start_index + seg_len
+        seg_label_seq[start_index:end_index] = i
+        start_index = end_index
+
+    return seg_label_seq
+
+
 def reduce_all_equal(segment):
     if not np.all(segment == segment[0]):
         raise AssertionError()
@@ -953,20 +967,16 @@ def reduce_over_segments(signal, seg_label_seq, reduction=None):
 
     segment_labels = np.unique(seg_label_seq)
     num_segments = segment_labels.shape[0]
+    num_samples = signal.shape[0]
+    remaining_dims = signal.shape[1:]
 
-    if signal.ndim == 1:
-        num_samples = signal.shape[0]
-        samples = np.zeros((num_samples,))
-        segments = np.zeros((num_segments,))
-    else:
-        num_samples, num_feats = signal.shape[:2]
-        samples = np.zeros((num_samples, num_feats))
-        segments = np.zeros((num_segments, num_feats))
+    samples = np.zeros((num_samples,) + remaining_dims)
+    segments = np.zeros((num_segments,) + remaining_dims)
 
     for i in segment_labels:
         in_segment = seg_label_seq == i
-
-        reduced = reduction(signal[in_segment])
+        segment = signal[in_segment]
+        reduced = reduction(segment)
 
         samples[in_segment] = reduced
         segments[i] = reduced
