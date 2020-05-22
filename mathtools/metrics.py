@@ -10,6 +10,20 @@ from . import utils
 logger = logging.getLogger(__name__)
 
 
+def accuracy_upto(pred_seq, gt_seq, equivalence=None):
+    if equivalence is None:
+        def equivalence(x, y):
+            return x == y
+
+    is_eq = np.array(
+        [equivalence(p, gt) for p, gt in zip(pred_seq, gt_seq)],
+        dtype=bool
+    )
+
+    accuracy = is_eq.sum() / len(is_eq)
+    return accuracy
+
+
 class RationalPerformanceMetric():
     """
     Performance metric with a numerator and a denominator.

@@ -171,21 +171,16 @@ def writeResults(results_file, metric_dict, sweep_param_name, model_params):
 
 
 # -=( CROSS VALIDATION )==-----------------------------------------------------
-def makeDataSplits(dataset_size, val_ratio=None, **kwargs):
+def makeDataSplits(dataset_size, val_ratio=None, precomputed_fn=None, **kwargs):
     """ Splits data into cross-validation folds.
 
     Parameters
     ----------
-    data : iterable
-        Each argument should be an iterable of data.
-    test_ratio : float, optional
-        Proportion of the data that should be used as the test set.
+    dataset_size : int
     val_ratio : float, optional
-        Proportion of the data that should be used as the validation set.
-    loo_cv : bool, optional
-        Leave-one-out cross-validation mode. If True, returns N splits, each
-        with a training set of size N-1, a test set of size 1, and an empty
-        validation set.
+        Proportion of the training data that should be used for validation.
+    precomputed_fn : string, optional
+        If this argument is provided, pre-computed splits will be loaded from a file.
 
     Returns
     -------
@@ -194,6 +189,10 @@ def makeDataSplits(dataset_size, val_ratio=None, **kwargs):
         particular cross-validation fold. In other words,
         `data_splits[i] = (train_set_i, val_set_i, test_set_i)`
     """
+
+    if precomputed_fn is not None:
+        splits = joblib.load(precomputed_fn)
+        return splits
 
     if not kwargs:
         cv_splitter = model_selection.LeaveOneOut()
