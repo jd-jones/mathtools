@@ -13,7 +13,10 @@ import csv
 
 from matplotlib import pyplot as plt
 import numpy as np
-import torch
+try:
+    import torch
+except ImportError:
+    pass
 import joblib
 from sklearn import model_selection
 

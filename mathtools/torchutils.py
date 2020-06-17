@@ -377,7 +377,7 @@ class ArrayDataset(torch.utils.data.Dataset):
     _device : torch.Device
     """
 
-    def __init__(self, data, labels, device=None, labels_type=None):
+    def __init__(self, data, labels, sample_ids=None, device=None, labels_type=None):
         self.num_obsv_dims = data.shape[1]
 
         if len(labels.shape) == 2:
@@ -389,6 +389,7 @@ class ArrayDataset(torch.utils.data.Dataset):
             raise ValueError(err_str)
 
         self._device = device
+        self._sample_ids = sample_ids
 
         data = torch.tensor(data, dtype=torch.float)
         labels = torch.tensor(labels)
@@ -416,7 +417,12 @@ class ArrayDataset(torch.utils.data.Dataset):
         data = self._data[i]
         label = self._labels[i]
 
-        return data, label
+        if self._sample_ids is None:
+            sample_id = -1
+        else:
+            sample_id = self._sample_ids[i]
+
+        return data, label, sample_id
 
 
 class SequenceDataset(torch.utils.data.Dataset):

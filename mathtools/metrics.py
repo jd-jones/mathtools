@@ -1,6 +1,9 @@
 import logging
 
-import torch
+try:
+    import torch
+except ImportError:
+    pass
 import numpy as np
 from sklearn import metrics
 
