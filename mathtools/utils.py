@@ -10,7 +10,10 @@ import shutil
 from collections import deque
 import glob
 import csv
+import argparse
+import inspect
 
+import yaml
 from matplotlib import pyplot as plt
 import numpy as np
 try:
@@ -152,7 +155,7 @@ def getUniqueIds(dir_path, prefix=None, suffix=None):
     return np.array(sorted(tuple(trial_ids)))
 
 
-def writeResults(results_file, metric_dict, sweep_param_name, model_params):
+def writeResults(results_file, metric_dict, sweep_param_name, model_params, write_mode='a'):
     rows = []
 
     if not os.path.exists(results_file):
@@ -171,6 +174,45 @@ def writeResults(results_file, metric_dict, sweep_param_name, model_params):
         writer = csv.writer(csvfile)
         for row in rows:
             writer.writerow(row)
+
+
+def parse_args(main):
+    # Parse command line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config_file')
+
+    for arg_name in inspect.getfullargspec(main).args:
+        parser.add_argument(f'--{arg_name}')
+
+    args = vars(parser.parse_args())
+    args = {k: yaml.safe_load(v) for k, v in args.items() if v is not None}
+
+    return args
+
+
+def parse_config(cl_args, script_name=None):
+    # Load config file and override with any provided command line args
+    config_file_path = cl_args.pop('config_file', None)
+    if config_file_path is None:
+        file_basename = stripExtension(script_name)
+        config_fn = f"{file_basename}.yaml"
+        config_file_path = os.path.join(
+            os.path.expanduser('~'), 'repo', 'kinemparse', 'scripts', config_fn
+        )
+    else:
+        config_fn = os.path.basename(config_file_path)
+    with open(config_file_path, 'rt') as config_file:
+        config = yaml.safe_load(config_file)
+    if config is None:
+        config = {}
+
+    for k, v in cl_args.items():
+        if isinstance(v, dict) and k in config:
+            config[k].update(v)
+        else:
+            config[k] = v
+
+    return config, config_fn
 
 
 # -=( CROSS VALIDATION )==-----------------------------------------------------
@@ -1441,8 +1483,11 @@ def plot_array(inputs, labels, label_names, fn=None, tick_names=None):
     figsize = (subplot_width, num_axes * subplot_height)
     fig, axes = plt.subplots(num_axes, figsize=figsize, sharex=True)
 
-    inputs = inputs.reshape(-1, inputs.shape[-1])
-    axes[-1].imshow(inputs, interpolation='none', aspect='auto')
+    inputs = inputs.reshape(-1, inputs.shape[-1]).squeeze()
+    if inputs.ndim == 1:
+        axes[-1].plot(inputs)
+    else:
+        axes[-1].imshow(inputs, interpolation='none', aspect='auto')
     axes[-1].set_ylabel('Input')
 
     for i, (label, label_name) in enumerate(zip(labels, label_names)):
