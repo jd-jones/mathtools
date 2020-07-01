@@ -201,9 +201,12 @@ def parse_config(cl_args, script_name=None):
         )
     else:
         config_fn = os.path.basename(config_file_path)
-    with open(config_file_path, 'rt') as config_file:
-        config = yaml.safe_load(config_file)
-    if config is None:
+    if os.path.exists(config_file_path):
+        with open(config_file_path, 'rt') as config_file:
+            config = yaml.safe_load(config_file)
+        if config is None:
+            config = {}
+    else:
         config = {}
 
     for k, v in cl_args.items():
