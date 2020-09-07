@@ -141,18 +141,23 @@ def setupExceptionHandler():
         sys.excepthook = exceptionHandler
 
 
-def getUniqueIds(dir_path, prefix=None, suffix=None):
+def getUniqueIds(dir_path, prefix=None, suffix=None, to_array=False):
     if prefix is None:
         prefix = "trial-"
     if suffix is None:
         suffix = ".pkl"
 
     trial_ids = set(
-        int(os.path.basename(fn).split(prefix)[1].split('_')[0])
+        os.path.basename(fn).split(prefix)[1].split('_')[0]
         for fn in glob.glob(os.path.join(dir_path, f"{prefix}*{suffix}"))
     )
+    trial_ids = sorted(tuple(trial_ids))
 
-    return np.array(sorted(tuple(trial_ids)))
+    if to_array:
+        trial_ids = tuple(map(int, trial_ids))
+        return np.array(trial_ids)
+
+    return trial_ids
 
 
 def writeResults(results_file, metric_dict, sweep_param_name, model_params, write_mode='a'):
@@ -1129,7 +1134,7 @@ def zipValues(*dicts):
         d_keys = tuple(d.keys())
         if d_keys != first_keys:
             err_str = (
-                f"can't zip dicts because keys differ: "
+                "can't zip dicts because keys differ: "
                 "{d_keys} != {first_keys}"
             )
             raise ValueError(err_str)
