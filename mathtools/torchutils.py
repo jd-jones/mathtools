@@ -538,7 +538,7 @@ class PickledVideoDataset(torch.utils.data.Dataset):
         """
 
         if seq_ids is None:
-            raise ValueError(f"This class must be initialized with seq_ids")
+            raise ValueError("This class must be initialized with seq_ids")
 
         if len(labels[0].shape) == 2:
             self.num_label_types = labels[0].shape[1]
