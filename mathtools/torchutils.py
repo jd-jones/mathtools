@@ -208,7 +208,9 @@ def predictSamples(
 
             if return_io_history:
                 batch_io = (preds, scores) + tuple(sample)
-                io_history.append(tuple(x.cpu() for x in batch_io))
+                io_history.append(
+                    tuple(x.cpu() if isinstance(x, torch.Tensor) else x for x in batch_io)
+                )
 
             if seq_as_batch:
                 preds = preds[0]
