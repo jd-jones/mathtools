@@ -160,7 +160,7 @@ def getUniqueIds(dir_path, prefix=None, suffix=None, to_array=False):
     return trial_ids
 
 
-def writeResults(results_file, metric_dict, sweep_param_name, model_params, write_mode='a'):
+def writeResults(results_file, metric_dict, sweep_param_name, model_params):
     rows = []
 
     if not os.path.exists(results_file):
@@ -1169,6 +1169,25 @@ def countItems(items):
 
 
 # --=( NUMERICAL COMPUTATIONS )=-----------------------------------------------
+def firstMatchingIndex(array, values, check_single=True):
+    if isinstance(values, np.ndarray):
+        matching_indices = np.array([
+            firstMatchingIndex(array, v, check_single=check_single)
+            for v in values
+        ])
+        return matching_indices
+
+    matching_idxs = np.nonzero(array == values)[0]
+
+    if check_single:
+        num_matching = matching_idxs.shape[0]
+        if num_matching != 1:
+            err_str = f"{num_matching} matching indices for value {values}, but 1 is expected"
+            raise AssertionError(err_str)
+
+    return matching_idxs[0]
+
+
 def plotArray(data, fn=None, label=None):
     """ Plot an array with accompanying colorbar. """
 
@@ -1482,6 +1501,48 @@ def copyFile(file_path, dest_dir):
 
 
 # --=( VISUALIZATION )=--------------------------------------------------------
+def plot_multi(
+        inputs, labels, fn=None, tick_names=None,
+        axis_names=None, label_name=None, feature_names=None):
+    subplot_width = 12
+    subplot_height = 3
+
+    num_axes, num_features, __ = inputs.shape
+
+    figsize = (subplot_width, num_axes * subplot_height)
+    fig, axes = plt.subplots(num_axes, figsize=figsize, sharex=True)
+
+    if axis_names is None:
+        axis_names = tuple(f'axis {i}' for i in range(num_axes))
+
+    if label_name is None:
+        label_name = 'label'
+
+    if feature_names is None:
+        feature_names = tuple(f'feat {i}' for i in range(num_features))
+
+    for i in range(num_axes):
+        for j, feature_seq in enumerate(inputs[i]):
+            axes[i].plot(feature_seq, label=feature_names[j])
+
+        label_axis = axes[i].twinx()
+        label_axis.plot(labels[i], label=label_name, color='tab:red')
+
+        if tick_names is not None:
+            label_axis.set_yticks(range(len(tick_names)))
+            label_axis.set_yticklabels(tick_names)
+
+        axes[i].set_ylabel(axis_names[i])
+        axes[i].legend()
+
+    plt.tight_layout()
+    if fn is None:
+        plt.show()
+    else:
+        plt.savefig(fn)
+        plt.close()
+
+
 def plot_array(inputs, labels, label_names, fn=None, tick_names=None):
     subplot_width = 12
     subplot_height = 3
