@@ -411,6 +411,15 @@ def validateCvFold(train_idxs, test_idxs):
 
 
 # -=( INTEGERIZERS )==---------------------------------------------------------
+def getIndex(item, vocab):
+    for i, candidate in enumerate(vocab):
+        if candidate == item:
+            return i
+    else:
+        vocab.append(item)
+        return len(vocab) - 1
+
+
 class Integerizer(object):
     """ Collection associating distinct object types with consecutive integers.
 
@@ -992,6 +1001,13 @@ def computeSampleTimes(sample_rate, start_time, end_time):
 def computeSegments(seq):
     segments, segment_lens = zip(*genSegments(seq))
     return tuple(segments), tuple(segment_lens)
+
+
+def fromSegments(segments, segment_lens):
+    seq = []
+    for segment, length in zip(segments, segment_lens):
+        seq += [segment] * length
+    return seq
 
 
 def makeSegmentLabels(label_seq):
