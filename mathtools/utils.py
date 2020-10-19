@@ -155,7 +155,7 @@ def getUniqueIds(dir_path, prefix=None, suffix=None, to_array=False):
 
     if to_array:
         trial_ids = tuple(map(int, trial_ids))
-        return np.array(trial_ids)
+        return np.array(sorted(trial_ids))
 
     return trial_ids
 
@@ -1307,7 +1307,8 @@ def safeDivide(numerator, denominator):
 
 
 def makeHistogram(
-        num_classes, samples, normalize=False, ignore_empty=True, backoff_counts=0):
+        num_classes, samples, normalize=False, ignore_empty=True, backoff_counts=0,
+        vocab=None):
     """ Make a histogram representing the empirical distribution of the input.
 
     Parameters
@@ -1343,9 +1344,12 @@ def makeHistogram(
     if ignore_empty and not np.any(samples):
         return hist
 
+    if vocab is None:
+        vocab = range(num_classes)
+
     # Count occurrences of each class in the histogram
-    for index in range(num_classes):
-        class_count = np.sum(samples == index)
+    for index, item in enumerate(vocab):
+        class_count = np.sum(samples == item)
         hist[index] = class_count
 
     # Add in the backoff counts
@@ -1559,31 +1563,49 @@ def plot_multi(
         plt.close()
 
 
-def plot_array(inputs, labels, label_names, fn=None, tick_names=None):
+def plot_array(inputs, labels, label_names, fn=None, tick_names=None, labels_together=False):
     subplot_width = 12
     subplot_height = 3
 
-    num_axes = 1 + len(labels)
+    if inputs is None:
+        num_input_axes = 0
+    else:
+        num_input_axes = 1
 
+    if labels_together:
+        num_label_axes = 1
+    else:
+        num_label_axes = len(labels)
+
+    num_axes = num_input_axes + num_label_axes
     figsize = (subplot_width, num_axes * subplot_height)
     fig, axes = plt.subplots(num_axes, figsize=figsize, sharex=True)
+    if num_axes == 1:
+        axes = [axes]
 
-    inputs = inputs.reshape(-1, inputs.shape[-1]).squeeze()
-    if inputs.ndim == 1:
-        axes[-1].plot(inputs)
-    else:
-        axes[-1].imshow(inputs, interpolation='none', aspect='auto')
-    axes[-1].set_ylabel('Input')
+    if inputs is not None:
+        inputs = inputs.reshape(-1, inputs.shape[-1]).squeeze()
+        if inputs.ndim == 1:
+            axes[-1].plot(inputs)
+        else:
+            axes[-1].imshow(inputs, interpolation='none', aspect='auto')
+        axes[-1].set_ylabel('Input')
 
     for i, (label, label_name) in enumerate(zip(labels, label_names)):
+        if labels_together:
+            axis = axes[0]
+        else:
+            axis = axes[i]
         if label.ndim == 1:
-            axes[i].plot(label, label=label_name)
+            axis.plot(label, label=label_name)
         elif label.ndim == 2:
-            axes[i].imshow(label, interpolation='none', aspect='auto')
+            axis.imshow(label, interpolation='none', aspect='auto')
         if tick_names is not None:
-            axes[i].set_yticks(range(len(tick_names)))
-            axes[i].set_yticklabels(tick_names)
-        axes[i].set_ylabel(label_name)
+            axis.set_yticks(range(len(tick_names)))
+            axis.set_yticklabels(tick_names)
+        if labels_together:
+            axis.legend()
+        axis.set_ylabel(label_name)
 
     plt.tight_layout()
     if fn is None:
