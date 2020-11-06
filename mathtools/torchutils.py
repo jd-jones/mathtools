@@ -573,7 +573,7 @@ class PickledVideoDataset(torch.utils.data.Dataset):
             for win_index in range(0, seq_len, self.batch_size)
         )
 
-        logger.info('Initialized ArrayDataset.')
+        logger.info('Initialized PickledVideoDataset.')
         logger.info(f"{self.num_label_types} unique labels")
 
     def __len__(self):
