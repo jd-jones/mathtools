@@ -182,7 +182,6 @@ def predictSamples(
         m.initializeCounts()
 
     if update_model:
-        scheduler.step()
         model.train()
     else:
         model.eval()
@@ -236,6 +235,9 @@ def predictSamples(
 
             for key, value in metrics.items():
                 metrics[key].accumulate(preds, labels, loss)
+
+    if update_model:
+        scheduler.step()
 
     return io_history
 
