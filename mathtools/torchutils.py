@@ -348,6 +348,9 @@ def plotEpochLog(epoch_log, subfig_size=None, title='', fn=None):
     figsize = subfig_size[0], subfig_size[1] * num_plots
     fig, axes = plt.subplots(num_plots, figsize=figsize, sharex=True)
 
+    if num_plots == 1:
+        axes = [axes]
+
     for i, (name, val) in enumerate(epoch_log.items()):
         axis = axes[i]
         axis.plot(val, '-o')
@@ -441,7 +444,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
     def __init__(
             self, data, labels, device=None, labels_dtype=None, sliding_window_args=None,
-            transpose_data=False, seq_ids=None):
+            transpose_data=False, seq_ids=None, subsample_rate=None):
         """
         Parameters
         ----------
@@ -722,7 +725,7 @@ def conv2dOutputShape(
     if stride is None:
         stride = kernel_size
 
-    shape_in = np.array(shape_in[0:2])
+    shape_in = np.array(shape_in[1:])
     kernel_size = np.array(kernel_size)
     stride = np.array(stride)
     padding = np.array(padding)
@@ -731,4 +734,64 @@ def conv2dOutputShape(
     shape_out = (shape_in + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1
     shape_out = np.floor(shape_out).astype(int)
 
-    return shape_out.tolist() + [out_channels]
+    return tuple([out_channels] + shape_out.tolist())
+
+
+# -=( LOSSES )==---------------------------------------------------------------
+def bootstrapped_criterion(
+        inputs, targets, iteration, p, base_criterion=torch.nn.functional.cross_entropy,
+        warmup=-1, weight=None, ignore_index=-100, reduction=torch.mean):
+    if not 0 < p < 1:
+        raise ValueError("p should be in [0, 1] range, got: {}".format(p))
+
+    if isinstance(warmup, int):
+        this_p = 1.0 if iteration < warmup else p
+    elif callable(warmup):
+        this_p = warmup(p, iteration)
+    else:
+        raise ValueError(
+            "warmup should be int or callable, got {}".format(type(warmup))
+        )
+
+    # Shortcut
+    if this_p == 1.0:
+        return base_criterion(
+            inputs, targets, weight, ignore_index=ignore_index, reduction=reduction
+        )
+
+    raw_loss = base_criterion(
+        inputs, targets,
+        # weight=weight, ignore_index=ignore_index,
+        reduction="none"
+    ).view(-1)
+    num_elements = raw_loss.numel()
+
+    loss, _ = torch.topk(raw_loss, int(num_elements * this_p), sorted=False)
+    return reduction(loss)
+
+
+class BootstrappedCriterion(torch.nn.modules.loss._WeightedLoss):
+    def __init__(
+            self, p, base_criterion=torch.nn.functional.cross_entropy,
+            warmup=-1, weight=None, ignore_index=-100, reduction=torch.mean):
+        self.p = p
+        self.warmup = warmup
+        self.ignore_index = ignore_index
+        self._current_iteration = -1
+        self.base_criterion = base_criterion
+
+        super().__init__(weight, size_average=None, reduce=None, reduction=reduction)
+
+    def forward(self, inputs, targets):
+        self._current_iteration += 1
+        return bootstrapped_criterion(
+            inputs,
+            targets,
+            self._current_iteration,
+            self.p,
+            self.base_criterion,
+            self.warmup,
+            self.weight,
+            self.ignore_index,
+            self.reduction,
+        )

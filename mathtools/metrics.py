@@ -75,6 +75,15 @@ class AverageLoss(RationalPerformanceMetric):
         return self.name + ': ' + super().__str__()
 
 
+class ReciprocalAverageLoss(AverageLoss):
+    def evaluate(self):
+        return 1 / super().evaluate()
+
+    @property
+    def name(self):
+        return 'reciprocal loss'
+
+
 class ConfusionPerformanceMetric(RationalPerformanceMetric):
     def __init__(self):
         self.initializeCounts()
