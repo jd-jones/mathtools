@@ -13,6 +13,23 @@ from . import utils
 logger = logging.getLogger(__name__)
 
 
+def makeMetric(name):
+    if name == 'Reciprocal Loss':
+        return ReciprocalAverageLoss()
+    elif name == 'Loss':
+        return AverageLoss()
+    elif name == 'Accuracy':
+        return Accuracy()
+    elif name == 'Precision':
+        return Precision()
+    elif name == 'Recall':
+        return Recall()
+    elif name == 'F1':
+        return Fmeasure(beta=1)
+    else:
+        raise AssertionError()
+
+
 def accuracy_upto(pred_seq, gt_seq, equivalence=None):
     if equivalence is None:
         def equivalence(x, y):
