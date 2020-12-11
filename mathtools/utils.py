@@ -997,6 +997,17 @@ def computeSampleTimes(sample_rate, start_time, end_time):
     return sample_times
 
 
+def sampleWithoutReplacement(array, num_samples=1, return_indices=False):
+    idxs = np.arange(array.shape[0])
+    np.random.shuffle(idxs)
+    idxs = idxs[:num_samples]
+
+    if return_indices:
+        return idxs
+
+    return array[idxs]
+
+
 # -=( SEGMENTS, LABELS AND STUFF)==--------------------------------------------
 def computeSegments(seq):
     segments, segment_lens = zip(*genSegments(seq))
@@ -1591,6 +1602,9 @@ def plot_array(inputs, labels, label_names, fn=None, tick_names=None, labels_tog
             axes[-1].imshow(inputs, interpolation='none', aspect='auto')
         axes[-1].set_ylabel('Input')
 
+    min_val = min(label.min() for label in labels)
+    max_val = max(label.max() for label in labels)
+
     for i, (label, label_name) in enumerate(zip(labels, label_names)):
         if labels_together:
             axis = axes[0]
@@ -1599,7 +1613,7 @@ def plot_array(inputs, labels, label_names, fn=None, tick_names=None, labels_tog
         if label.ndim == 1:
             axis.plot(label, label=label_name)
         elif label.ndim == 2:
-            axis.imshow(label, interpolation='none', aspect='auto')
+            axis.pcolormesh(label, vmin=min_val, vmax=max_val)
         if tick_names is not None:
             axis.set_yticks(range(len(tick_names)))
             axis.set_yticklabels(tick_names)

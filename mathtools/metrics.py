@@ -216,6 +216,10 @@ def truePositives(predicted, true):
         pred_is_positive = predicted != 0
         true_positives = predicted[pred_is_positive] == true[pred_is_positive]
         return true_positives.sum().float()
+    if isinstance(predicted, np.ndarray) and isinstance(true, np.ndarray):
+        pred_is_positive = predicted != 0
+        true_positives = predicted[pred_is_positive] == true[pred_is_positive]
+        return true_positives.sum().astype(float)
     try:
         return sum(p == t for p, t in zip(predicted, true) if t)
     except TypeError:
@@ -227,6 +231,10 @@ def trueNegatives(predicted, true):
         pred_is_negative = predicted == 0
         true_negatives = predicted[pred_is_negative] == true[pred_is_negative]
         return true_negatives.sum().float()
+    if isinstance(predicted, np.ndarray) and isinstance(true, np.ndarray):
+        pred_is_negative = predicted == 0
+        true_negatives = predicted[pred_is_negative] == true[pred_is_negative]
+        return true_negatives.sum().astype(float)
     try:
         return sum(p == t for p, t in zip(predicted, true) if not t)
     except TypeError:
@@ -238,6 +246,10 @@ def falsePositives(predicted, true):
         pred_is_positive = predicted != 0
         false_positives = predicted[pred_is_positive] != true[pred_is_positive]
         return false_positives.sum().float()
+    if isinstance(predicted, np.ndarray) and isinstance(true, np.ndarray):
+        pred_is_positive = predicted != 0
+        false_positives = predicted[pred_is_positive] != true[pred_is_positive]
+        return false_positives.sum().astype(float)
     try:
         return sum(p != t for p, t in zip(predicted, true) if t)
     except TypeError:
@@ -249,6 +261,10 @@ def falseNegatives(predicted, true):
         pred_is_negative = predicted == 0
         false_negatives = predicted[pred_is_negative] != true[pred_is_negative]
         return false_negatives.sum().float()
+    if isinstance(predicted, np.ndarray) and isinstance(true, np.ndarray):
+        pred_is_negative = predicted == 0
+        false_negatives = predicted[pred_is_negative] != true[pred_is_negative]
+        return false_negatives.sum().astype(float)
     try:
         return sum(p != t for p, t in zip(predicted, true) if not t)
     except TypeError:

@@ -198,7 +198,7 @@ def predictSamples(
             if update_interval is not None and i % update_interval == 0:
                 logger.info(f'Predicted {i} minibatches...')
 
-            if seq_as_batch:
+            if seq_as_batch == 'sample mode':
                 sample = tuple(x[0] for x in sample)
 
             if data_labeled:
@@ -214,11 +214,11 @@ def predictSamples(
                     tuple(x.cpu() if isinstance(x, torch.Tensor) else x for x in batch_io)
                 )
 
-            # if seq_as_batch:
-                # preds = preds[0]
-                # scores = scores[0]
-                # labels = labels[0]
-                # ids = ids[0]
+            if seq_as_batch == 'seq mode':
+                preds = preds[0]
+                scores = scores[0]
+                labels = labels[0]
+                ids = ids[0]
 
             if label_mapping is not None:
                 for i, j in label_mapping.items():
@@ -447,7 +447,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
     def __init__(
             self, data, labels, device=None, labels_dtype=None, sliding_window_args=None,
-            transpose_data=False, seq_ids=None, subsample_rate=None):
+            transpose_data=False, flatten_feats=None, seq_ids=None, subsample_rate=None):
         """
         Parameters
         ----------
@@ -463,19 +463,10 @@ class SequenceDataset(torch.utils.data.Dataset):
             taken to be the median over the labels in that window.
         """
 
-        self.num_obsv_dims = data[0].shape[1]
-
-        if len(labels[0].shape) == 2:
-            # self.num_label_types = labels[0].max() + 1
-            self.num_label_types = labels[0].shape[1]
-        elif len(labels[0].shape) < 2:
-            self.num_label_types = np.unique(np.hstack(labels)).max() + 1
-        else:
-            err_str = f"Labels have a weird shape: {labels[0].shape}"
-            raise ValueError(err_str)
-
         self.sliding_window_args = sliding_window_args
         self.transpose_data = transpose_data
+        self.flatten_feats = flatten_feats
+        self.labels_dtype = labels_dtype
 
         self._device = device
         self._seq_ids = seq_ids
@@ -491,6 +482,21 @@ class SequenceDataset(torch.utils.data.Dataset):
             f"{self.num_label_types} unique labels"
         )
 
+    @property
+    def num_obsv_dims(self):
+        data_seq = self._data[0]
+        if self.flatten_feats:
+            data_seq = data_seq.view(data_seq.shape[0], -1).contiguous()
+        return data_seq.shape[1]
+
+    @property
+    def num_label_types(self):
+        label_seq = self._labels[0]
+        if self.labels_dtype == torch.float:
+            return label_seq.shape[1]
+        max_label = max(int(label_seq.max()) for label_seq in self._labels)
+        return max_label + 1
+
     def __len__(self):
         return len(self._data)
 
@@ -502,6 +508,9 @@ class SequenceDataset(torch.utils.data.Dataset):
             seq_id = -1
         else:
             seq_id = self._seq_ids[i]
+
+        if self.flatten_feats:
+            data_seq = data_seq.view(data_seq.shape[0], -1).contiguous()
 
         # shape (sequence_len, num_dims) --> (num_dims, sequence_len)
         if self.transpose_data:
