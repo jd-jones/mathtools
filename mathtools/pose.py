@@ -14,8 +14,8 @@ class RigidTransform(object):
         self._r = rotation
 
     def __eq__(self, other):
-        translations_equal = self._t == other._t
-        rotations_equal = self._R == other._R
+        translations_equal = np.allclose(self._t, other._t)
+        rotations_equal = np.allclose(self._r.as_quat(), other._r.as_quat())
         return translations_equal and rotations_equal
 
     def apply(self, vectors, inverse=False):
@@ -35,6 +35,10 @@ class RigidTransform(object):
 
     def __truediv__(self, other):
         return other.inv() * self
+
+    def __repr__(self):
+        rpy_angles = self._r.as_euler('zyx', degrees=True)
+        return f"RigidTransform(rpy: {rpy_angles},  xyz: {self._t})"
 
     def getAttributes(self, rotation_as=None):
         if rotation_as is None:
@@ -62,6 +66,13 @@ class RigidTransform(object):
         t_mag = np.linalg.norm(self._t, axis=1)
         r_mag = self._r.magnitude()
         return t_mag, r_mag
+
+    @staticmethod
+    def identity():
+        """ Return the identity transform. """
+        r = Rotation.identity()
+        t = np.zeros(3)
+        return RigidTransform(t, r)
 
 
 def unpack_pose(pose_seq, ignore_nan=False):

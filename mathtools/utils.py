@@ -12,6 +12,7 @@ import glob
 import csv
 import argparse
 import inspect
+import copy
 
 import yaml
 from matplotlib import pyplot as plt
@@ -412,12 +413,20 @@ def validateCvFold(train_idxs, test_idxs):
 
 # -=( INTEGERIZERS )==---------------------------------------------------------
 def getIndex(item, vocab):
-    for i, candidate in enumerate(vocab):
-        if candidate == item:
-            return i
-    else:
-        vocab.append(item)
-        return len(vocab) - 1
+    if isinstance(vocab, list):
+        for i, candidate in enumerate(vocab):
+            if candidate == item:
+                return i
+        else:
+            vocab.append(item)
+            return len(vocab) - 1
+
+    elif isinstance(vocab, dict):
+        i = vocab.get(item, None)
+        if i is None:
+            i = len(vocab)
+            vocab[item] = i
+        return i
 
 
 class Integerizer(object):
@@ -600,6 +609,42 @@ def bfs(start_index, edges, visited=None):
 
 
 # --=( STRING )=---------------------------------------------------------------
+def string_from_parts(*parts, prefix='', suffix='', separator=' '):
+    base_str = separator.join(parts)
+    return prefix + base_str + suffix
+
+
+def parts_from_string(string, prefix='', suffix='', separator=' '):
+    base_str = remove_affixes(string, prefix=prefix, suffix=suffix)
+    return base_str.split(separator)
+
+
+def remove_affixes(string, prefix='', suffix=''):
+    return remove_suffix(remove_prefix(string, prefix), suffix)
+
+
+def remove_prefix(string, prefix):
+    """ Version of str.removeprefix implemented in python 3.9+ """
+
+    string = copy.deepcopy(string)
+
+    if string.startswith(prefix):
+        string = string[len(prefix):]
+
+    return string
+
+
+def remove_suffix(string, suffix):
+    """ Version of str.removesuffix implemented in python 3.9+ """
+
+    string = copy.deepcopy(string)
+
+    if string.endswith(suffix):
+        string = string[:-len(suffix)]
+
+    return string
+
+
 def stripExtension(file_path):
     """ Return a copy of `file_path` with the file extension removed. """
 
@@ -625,20 +670,6 @@ def camelCase(string):
 
 
 # --=( SEQUENCE )=-------------------------------------------------------------
-def genSegments(seq):
-    cur_state = seq[0]
-    segment_len = 0
-    for state in seq[1:]:
-        segment_len += 1
-        if state != cur_state:
-            yield cur_state, segment_len
-            cur_state = state
-            segment_len = 0
-    else:
-        segment_len += 1
-        yield cur_state, segment_len
-
-
 def nearestIndex(sequence, val, seq_sorted=False):
     """ Find the index of the element in sequence closest to val. """
 
@@ -693,7 +724,7 @@ def nearestIndexUnsorted(sequence, val):
     return min(seq_indices, key=dist)
 
 
-def nearestIndices(sequence, values):
+def nearestIndices(sequence, values, values_sorted=True):
     """ Return the indices in `sequence` nearest to each items in `values`.
 
     NOTE: `sequence` and `values` must be sorted in increasing order.
@@ -702,6 +733,11 @@ def nearestIndices(sequence, values):
     ----------
     sequence : numpy.array
     values : iterable
+    values_sorted : bool, optional
+        If False, a sorted copy of `values` is made. Then, the resulting `indices`
+        is un-sorted before returning so that each item in `indices` corresponds
+        to the closest items in `values`.
+        NOTE: If `values_sorted` is False, `values` must be a numpy array.
 
     Returns
     -------
@@ -711,14 +747,26 @@ def nearestIndices(sequence, values):
         which is closest to the i-th element of `values` in absolute value.
     """
 
-    indices = []
-    last_index = 0
-    for val in values:
-        cur_seq = sequence[last_index:]
-        last_index += nearestIndex(cur_seq, val, seq_sorted=True)
-        indices.append(last_index)
+    if not values_sorted:
+        sort_idxs = values.argsort()
+        sorted_values = values[sort_idxs]
+        sorted_indices = nearestIndices(sequence, sorted_values)
+        return sorted_indices[sort_idxs.argsort()]
 
-    return np.array(indices)
+    def generateNearestIndices(sequence, values):
+        last_index = 0
+        for val in values:
+            cur_seq = sequence[last_index:]
+            last_index += nearestIndex(cur_seq, val, seq_sorted=True)
+            yield last_index
+
+    indices = generateNearestIndices(sequence, values)
+
+    if isinstance(values, np.ndarray):
+        return np.array(list(indices))
+
+    InputType = type(values)
+    return InputType(indices)
 
 
 def signalEdges(sequence, edge_type=None):
@@ -796,14 +844,12 @@ def filterSeqs(seqs_to_filter, ref_seqs, filter_func=isEmpty):
 def resampleSeq(sample_seq, sample_times, new_times):
     """ Resample a signal by choosing the nearest sample in time. """
 
-    if isEmpty(new_times):
-        warn_str = 'Encountered empty resampling array'
-        logger.warning(warn_str)
-
     resampled_indices = nearestIndices(sample_times, new_times)
 
     if isinstance(sample_seq, np.ndarray):
         return sample_seq[resampled_indices]
+    elif isinstance(sample_seq, torch.Tensor):
+        return sample_seq[torch.tensor(resampled_indices, dtype=torch.long)]
     else:
         return tuple(sample_seq[i] for i in resampled_indices)
 
@@ -1009,6 +1055,27 @@ def sampleWithoutReplacement(array, num_samples=1, return_indices=False):
 
 
 # -=( SEGMENTS, LABELS AND STUFF)==--------------------------------------------
+def genSegments(seq):
+    if isinstance(seq, np.ndarray):
+        def eq(lhs, rhs):
+            return np.all(lhs == rhs)
+    else:
+        def eq(lhs, rhs):
+            return lhs == rhs
+
+    cur_state = seq[0]
+    segment_len = 0
+    for state in seq[1:]:
+        segment_len += 1
+        if not eq(state, cur_state):
+            yield cur_state, segment_len
+            cur_state = state
+            segment_len = 0
+    else:
+        segment_len += 1
+        yield cur_state, segment_len
+
+
 def computeSegments(seq):
     segments, segment_lens = zip(*genSegments(seq))
     return tuple(segments), tuple(segment_lens)
