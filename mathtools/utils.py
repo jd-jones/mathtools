@@ -13,10 +13,12 @@ import csv
 import argparse
 import inspect
 import copy
+import json
 
 import yaml
 from matplotlib import pyplot as plt
 import numpy as np
+import pandas as pd
 try:
     import torch
 except ImportError:
@@ -154,6 +156,10 @@ def getUniqueIds(dir_path, prefix=None, suffix=None, to_array=False):
     )
     trial_ids = sorted(tuple(trial_ids))
 
+    if not trial_ids:
+        err_str = f"No files matching pattern '{prefix}*{suffix}' in {dir_path}"
+        raise AssertionError(err_str)
+
     if to_array:
         trial_ids = tuple(map(int, trial_ids))
         return np.array(sorted(trial_ids))
@@ -245,7 +251,7 @@ def makeDataSplits(dataset_size, val_ratio=None, precomputed_fn=None, **kwargs):
     """
 
     if precomputed_fn is not None:
-        splits = joblib.load(precomputed_fn)
+        splits = loadVariable(None, None, fn=os.path.expanduser(precomputed_fn))
         return splits
 
     if not kwargs:
@@ -1531,35 +1537,52 @@ def lower_tri(array):
 
 
 # --=( I/O )=------------------------------------------------------------------
-def loadVariable(attr_name, base_name=None, corpus_name=None):
-    working_path = os.path.expanduser(
-        os.path.join('~', 'repo', 'blocks', 'data', 'working')
-    )
-    corpus_path = os.path.join(working_path, base_name, corpus_name)
-    var_fn = f'{attr_name}.pkl'
-    var_path = os.path.join(corpus_path, var_fn)
-
-    attr_val = joblib.load(var_path)
-
-    return attr_val
+def loadMetadata(from_dir, rows=None):
+    metadata = pd.read_csv(os.path.join(from_dir, 'metadata.csv'), index_col=0)
+    if rows is not None:
+        metadata = metadata.loc[rows]
+    return metadata
 
 
-def saveVariable(var, attr_name, base_name=None, corpus_name=None, overwrite=False):
-    working_path = os.path.expanduser(
-        os.path.join('~', 'repo', 'blocks', 'data', 'working')
-    )
-    corpus_path = os.path.join(working_path, base_name, corpus_name)
-    if not os.path.exists(corpus_path):
-        os.makedirs(corpus_path)
+def saveMetadata(metadata, to_dir):
+    metadata.to_csv(os.path.join(to_dir, 'metadata.csv'), index=True)
 
-    var_fn = f'{attr_name}.pkl'
-    var_path = os.path.join(corpus_path, var_fn)
-    if os.path.exists(var_path):
-        if not overwrite:
-            err_str = f'File {var_fn} already exists! To overwrite, call me with overwrite=True'
-            raise FileExistsError(err_str)
 
-    joblib.dump(var, var_path)
+def loadVariable(var_name, from_dir, fn=None):
+    if fn is None:
+        pattern = os.path.join(from_dir, f"{var_name}*")
+        matches = glob.glob(pattern)
+        if len(matches) != 1:
+            err_str = f"Expected 1 file matching {pattern}, but found {len(matches)}!"
+            raise AssertionError(err_str)
+        fn = matches[0]
+
+    __, ext = os.path.splitext(fn)
+    if ext == '.npy':
+        var = np.load(fn, allow_pickle=False)
+    elif ext == '.pkl':
+        var = joblib.load(fn)
+    elif ext == '.json':
+        with open(fn, 'rt') as file_:
+            var = json.load(file_)
+    else:
+        err_str = f'Unrecognized file extension: {ext}'
+    return var
+
+
+def saveVariable(var, var_name, to_dir):
+    fn = os.path.join(to_dir, f'{var_name}')
+    if isinstance(var, np.ndarray):
+        np.save(fn, var, allow_pickle=False)
+    else:
+        try:
+            # Try dumping to string first: this avoids opening a file that gets
+            # left behind when an error is thrown in dump.
+            json.dumps(var)
+            with open(f'{fn}.json', 'wt') as file_:
+                json.dump(var, file_)
+        except TypeError:
+            joblib.dump(var, f'{fn}.pkl')
 
 
 def loadVideoData(corpus_name):
@@ -1596,6 +1619,43 @@ def copyFile(file_path, dest_dir):
     shutil.copy(file_path, dest_path)
 
     return dest_path
+
+
+class CvDataset(object):
+    def __init__(
+            self, trial_ids, data_dir, feature_fn_format=None, label_fn_format=None,
+            feat_transform=None):
+        self.trial_ids = trial_ids
+        self.metadata = loadMetadata(data_dir, rows=trial_ids)
+        self.vocab = loadVariable('vocab', data_dir)
+
+        self.label_seqs = self.loadAll(trial_ids, label_fn_format, data_dir)
+
+        self.feature_seqs = tuple(
+            f_seq if feat_transform is None else feat_transform(f_seq)
+            for f_seq in self.loadAll(trial_ids, feature_fn_format, data_dir)
+        )
+
+    @property
+    def num_states(self):
+        return len(self.vocab)
+
+    def loadAll(self, seq_ids, var_name, from_dir, prefix='trial='):
+        all_data = tuple(
+            loadVariable(f"{prefix}{seq_id}_{var_name}", from_dir)
+            for seq_id in seq_ids
+        )
+        return all_data
+
+    def getSplit(self, split_idxs):
+        split_data = tuple(
+            tuple(s[i] for i in split_idxs)
+            for s in (self.feature_seqs, self.label_seqs, self.trial_ids)
+        )
+        return split_data
+
+    def getFold(self, cv_fold):
+        return tuple(self.getSplit(split) for split in cv_fold)
 
 
 # --=( VISUALIZATION )=--------------------------------------------------------
