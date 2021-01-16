@@ -231,7 +231,10 @@ def parse_config(cl_args, script_name=None):
 
 
 # -=( CROSS VALIDATION )==-----------------------------------------------------
-def makeDataSplits(dataset_size, val_ratio=None, precomputed_fn=None, **kwargs):
+def makeDataSplits(
+        dataset_size, val_ratio=None, precomputed_fn=None,
+        by_group=None, metadata=None,
+        **kwargs):
     """ Splits data into cross-validation folds.
 
     Parameters
@@ -241,6 +244,14 @@ def makeDataSplits(dataset_size, val_ratio=None, precomputed_fn=None, **kwargs):
         Proportion of the training data that should be used for validation.
     precomputed_fn : string, optional
         If this argument is provided, pre-computed splits will be loaded from a file.
+    by_group : string, optional
+        Name of a metadata column that should be used to create group-level data splits.
+        If this argument is passed, `metadata` is also required.
+    metadata : pandas dataframe, shape (dataset_size, num_cols), optional
+        Dataframe containing auxiliary data used in group-level data splits.
+        For example, columns marking model and participant IDs can be used for
+        leave-one-person-out or leave-one-model-out cross validation. Used along
+        with `by_group`.
 
     Returns
     -------
@@ -254,13 +265,21 @@ def makeDataSplits(dataset_size, val_ratio=None, precomputed_fn=None, **kwargs):
         splits = loadVariable(None, None, fn=os.path.expanduser(precomputed_fn))
         return splits
 
-    if not kwargs:
-        cv_splitter = model_selection.LeaveOneOut()
-    else:
-        cv_splitter = model_selection.KFold(**kwargs)
-
     data_indices = np.arange(dataset_size)
-    splits = cv_splitter.split(data_indices)
+
+    if by_group is None:
+        if not kwargs:
+            cv_splitter = model_selection.LeaveOneOut()
+        else:
+            cv_splitter = model_selection.KFold(**kwargs)
+        splits = cv_splitter.split(data_indices)
+    else:
+        groups = metadata[by_group].to_numpy()
+        if not kwargs:
+            cv_splitter = model_selection.LeaveOneGroupOut()
+        else:
+            cv_splitter = model_selection.GroupKFold(**kwargs)
+        splits = cv_splitter.split(data_indices, groups=groups)
 
     if val_ratio is not None:
         def makeVal(i_train, i_test):
