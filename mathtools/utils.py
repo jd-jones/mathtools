@@ -281,7 +281,18 @@ def makeDataSplits(
             cv_splitter = model_selection.GroupKFold(**kwargs)
         splits = cv_splitter.split(data_indices, groups=groups)
 
-    if val_ratio is not None:
+    if val_ratio == 'group':
+        def makeVal(i_train, i_test):
+            train_groups = groups[i_train]
+            unique_train_groups = np.unique(train_groups)
+            val_group = np.random.choice(unique_train_groups)
+            is_val = train_groups == val_group
+            is_train = train_groups != val_group
+            i_val = i_train[is_val]
+            i_train = i_train[is_train]
+            return i_train, i_val, i_test
+        splits = tuple(makeVal(i_train, i_test) for i_train, i_test in splits)
+    elif val_ratio is not None:
         def makeVal(i_train, i_test):
             num_val = roundToInt(val_ratio * len(i_train))
             i_val = i_train[:num_val]
@@ -1640,20 +1651,18 @@ def copyFile(file_path, dest_dir):
     return dest_path
 
 
-class CvDataset(object):
+class BaseCvDataset(object):
     def __init__(
-            self, trial_ids, data_dir, feature_fn_format=None, label_fn_format=None,
-            feat_transform=None):
+            self, trial_ids, data_dir, metadata=None, vocab=None, label_fn_format=None):
+        if metadata is None:
+            metadata = loadMetadata(data_dir, rows=trial_ids)
+        if vocab is None:
+            vocab = loadVariable('vocab', data_dir)
+
         self.trial_ids = trial_ids
-        self.metadata = loadMetadata(data_dir, rows=trial_ids)
-        self.vocab = loadVariable('vocab', data_dir)
-
-        self.label_seqs = self.loadAll(trial_ids, label_fn_format, data_dir)
-
-        self.feature_seqs = tuple(
-            f_seq if feat_transform is None else feat_transform(f_seq)
-            for f_seq in self.loadAll(trial_ids, feature_fn_format, data_dir)
-        )
+        self.metadata = metadata
+        self.vocab = vocab
+        self.data_dir = data_dir
 
     @property
     def num_states(self):
@@ -1666,15 +1675,69 @@ class CvDataset(object):
         )
         return all_data
 
+    def getFold(self, cv_fold):
+        return tuple(self.getSplit(split) for split in cv_fold)
+
+    def getSplit(self, split_idxs):
+        split_data = tuple(
+            tuple(s[i] for i in split_idxs)
+            for s in (self.label_seqs, self.trial_ids)
+        )
+        return split_data
+
+
+class FeaturelessCvDataset(BaseCvDataset):
+    def __init__(self, trial_ids, data_dir, label_fn_format=None, **super_kwargs):
+        super().__init__(trial_ids, data_dir, **super_kwargs)
+
+        self.label_seqs = self._load_labels(label_fn_format)
+
+    @property
+    def num_states(self):
+        return len(self.vocab)
+
+    def _load_labels(self, label_fn_format):
+        return self.loadAll(self.trial_ids, label_fn_format, self.data_dir)
+
+    def loadAll(self, seq_ids, var_name, from_dir, prefix='trial='):
+        all_data = tuple(
+            loadVariable(f"{prefix}{seq_id}_{var_name}", from_dir)
+            for seq_id in seq_ids
+        )
+        return all_data
+
+    def getFold(self, cv_fold):
+        return tuple(self.getSplit(split) for split in cv_fold)
+
+    def getSplit(self, split_idxs):
+        split_data = tuple(
+            tuple(s[i] for i in split_idxs)
+            for s in (self.label_seqs, self.trial_ids)
+        )
+        return split_data
+
+
+class CvDataset(FeaturelessCvDataset):
+    def __init__(
+            self, trial_ids, data_dir,
+            feature_fn_format=None, feat_transform=None, **super_kwargs):
+        super().__init__(trial_ids, data_dir, **super_kwargs)
+
+        self.feature_seqs = self._load_features(feature_fn_format, feat_transform)
+
+    def _load_features(self, feature_fn_format, feat_transform):
+        feature_seqs = tuple(
+            f_seq if feat_transform is None else feat_transform(f_seq)
+            for f_seq in self.loadAll(self.trial_ids, feature_fn_format, self.data_dir)
+        )
+        return feature_seqs
+
     def getSplit(self, split_idxs):
         split_data = tuple(
             tuple(s[i] for i in split_idxs)
             for s in (self.feature_seqs, self.label_seqs, self.trial_ids)
         )
         return split_data
-
-    def getFold(self, cv_fold):
-        return tuple(self.getSplit(split) for split in cv_fold)
 
 
 # --=( VISUALIZATION )=--------------------------------------------------------
