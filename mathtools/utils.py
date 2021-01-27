@@ -144,12 +144,7 @@ def setupExceptionHandler():
         sys.excepthook = exceptionHandler
 
 
-def getUniqueIds(dir_path, prefix=None, suffix=None, to_array=False):
-    if prefix is None:
-        prefix = "trial-"
-    if suffix is None:
-        suffix = ".pkl"
-
+def getUniqueIds(dir_path, prefix='trial=', suffix='', to_array=False):
     trial_ids = set(
         os.path.basename(fn).split(prefix)[1].split('_')[0]
         for fn in glob.glob(os.path.join(dir_path, f"{prefix}*{suffix}"))
