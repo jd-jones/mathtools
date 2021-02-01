@@ -444,20 +444,21 @@ def validateCvFold(train_idxs, test_idxs):
 
 # -=( INTEGERIZERS )==---------------------------------------------------------
 def getIndex(item, vocab):
-    if isinstance(vocab, list):
+    if isinstance(vocab, list) or isinstance(vocab, tuple):
         for i, candidate in enumerate(vocab):
             if candidate == item:
                 return i
         else:
             vocab.append(item)
             return len(vocab) - 1
-
     elif isinstance(vocab, dict):
         i = vocab.get(item, None)
         if i is None:
             i = len(vocab)
             vocab[item] = i
         return i
+    else:
+        raise ValueError(f"Unrecognized vocab type: {type(vocab)}")
 
 
 class Integerizer(object):
