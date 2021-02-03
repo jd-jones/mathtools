@@ -702,6 +702,20 @@ def camelCase(string):
 
 
 # --=( SEQUENCE )=-------------------------------------------------------------
+def allEqual(sequence):
+    def match_first(item):
+        if isinstance(item, pd.DataFrame) or isinstance(item, np.ndarray):
+            return (item == sequence[0]).all(axis=None)
+        return item == sequence[0]
+    return all(match_first(item) for item in sequence)
+
+
+def selectSingleFromEq(sequence):
+    if not allEqual(sequence):
+        raise AssertionError('Not all items match in this collection')
+    return sequence[0]
+
+
 def nearestIndex(sequence, val, seq_sorted=False):
     """ Find the index of the element in sequence closest to val. """
 
