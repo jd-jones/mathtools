@@ -1663,7 +1663,8 @@ def copyFile(file_path, dest_dir):
 
 class BaseCvDataset(object):
     def __init__(
-            self, trial_ids, data_dir, metadata=None, vocab=None, label_fn_format=None):
+            self, trial_ids, data_dir, metadata=None, vocab=None, label_fn_format=None,
+            prefix='trial='):
         if metadata is None:
             metadata = loadMetadata(data_dir, rows=trial_ids)
         if vocab is None:
@@ -1673,12 +1674,16 @@ class BaseCvDataset(object):
         self.metadata = metadata
         self.vocab = vocab
         self.data_dir = data_dir
+        self.prefix = prefix
 
     @property
     def num_states(self):
         return len(self.vocab)
 
-    def loadAll(self, seq_ids, var_name, from_dir, prefix='trial='):
+    def loadAll(self, seq_ids, var_name, from_dir, prefix=None):
+        if prefix is None:
+            prefix = self.prefix
+
         all_data = tuple(
             loadVariable(f"{prefix}{seq_id}_{var_name}", from_dir)
             for seq_id in seq_ids
@@ -1709,7 +1714,10 @@ class FeaturelessCvDataset(BaseCvDataset):
     def _load_labels(self, label_fn_format):
         return self.loadAll(self.trial_ids, label_fn_format, self.data_dir)
 
-    def loadAll(self, seq_ids, var_name, from_dir, prefix='trial='):
+    def loadAll(self, seq_ids, var_name, from_dir, prefix=None):
+        if prefix is None:
+            prefix = self.prefix
+
         all_data = tuple(
             loadVariable(f"{prefix}{seq_id}_{var_name}", from_dir)
             for seq_id in seq_ids
