@@ -5,12 +5,103 @@ try:
 except ImportError:
     pass
 import numpy as np
+from matplotlib import pyplot as plt
 from sklearn import metrics
 
 from . import utils
 
 
 logger = logging.getLogger(__name__)
+
+
+def oov_rate(state_seq, state_vocab):
+    state_is_oov = ~np.array([s in state_vocab for s in state_seq], dtype=bool)
+    prop_state_oov = state_is_oov.sum() / state_is_oov.size
+    return prop_state_oov
+
+
+def confusionMatrix(all_pred_seqs, all_true_seqs, vocab_size):
+    """
+    Returns
+    -------
+    confusions: np.ndarray of int, shape (vocab_size, vocab_size)
+        Rows represent predicted labels; columns represent true labels.
+    """
+
+    confusions = np.zeros((vocab_size, vocab_size), dtype=int)
+
+    for pred_seq, true_seq in zip(all_pred_seqs, all_true_seqs):
+        for i_pred, i_true in zip(pred_seq, true_seq):
+            confusions[i_pred, i_true] += 1
+
+    return confusions
+
+
+def perClassAcc(confusions, return_counts=False):
+    class_counts = confusions.sum(axis=0)
+    per_class_acc = np.diag(confusions) / class_counts
+    if return_counts:
+        return per_class_acc, class_counts
+    return per_class_acc
+
+
+def plotConfusions(fn, confusions, vocab):
+    plt.figure(figsize=(24, 24))
+
+    vmax = np.abs(confusions).max()
+    plt.matshow(confusions, cmap='coolwarm', vmin=-vmax, vmax=vmax)
+
+    for i_row, row in enumerate(confusions):
+        for i_col, val in enumerate(row):
+            if not val:
+                continue
+            plt.text(
+                i_col, i_row, val,
+                fontsize=8, color='black', ha='center', va='center'
+            )
+
+    plt.xticks(ticks=range(len(vocab)), labels=vocab, rotation='vertical')
+    plt.yticks(ticks=range(len(vocab)), labels=vocab)
+    plt.colorbar()
+
+    plt.savefig(fn, bbox_inches='tight')
+
+
+def plotPerClassAcc(fn, vocab, per_class_acc, class_preds, class_counts):
+    macro_acc = per_class_acc.mean()
+
+    f, axes = plt.subplots(3, figsize=(12, 6), sharex=True)
+    axes[0].set_title(f"Macro Accuracy: {macro_acc * 100:.2f}%")
+    axes[0].bar(range(len(vocab)), per_class_acc)
+    for index, val in enumerate(per_class_acc):
+        eps = np.sign(val) * 0.01
+        axes[0].text(
+            x=index, y=val + eps, s=f"{val * 100:.0f}",
+            fontdict=dict(fontsize=8), va='center'
+        )
+    axes[0].set_ylabel("Accuracy")
+
+    axes[1].bar(range(len(vocab)), class_preds / class_counts.sum())
+    for index, val in enumerate(class_preds / class_counts.sum()):
+        eps = np.sign(val) * 0.01
+        axes[1].text(
+            x=index, y=val + eps, s=f"{val * 100:.0f}",
+            fontdict=dict(fontsize=8), va='center'
+        )
+    axes[1].set_ylabel("Pred Frequency")
+
+    axes[2].bar(range(len(vocab)), class_counts / class_counts.sum())
+    for index, val in enumerate(class_counts / class_counts.sum()):
+        eps = np.sign(val) * 0.01
+        axes[2].text(
+            x=index, y=val + eps, s=f"{val * 100:.0f}",
+            fontdict=dict(fontsize=8), va='center'
+        )
+    axes[2].set_xticks(range(len(vocab)))
+    axes[2].set_xticklabels(vocab, rotation='vertical')
+    axes[2].set_ylabel("True Frequency")
+
+    plt.savefig(fn, bbox_inches='tight')
 
 
 def makeMetric(name):
@@ -282,7 +373,7 @@ def classAccuracy(true_label_seqs, predicted_label_seqs):
     avg_accuracies = np.array(avg_accuracies)
     true_label_seq_lens = np.array(true_label_seq_lens)
 
-    num_classes = utils.numClasses([l for ls in true_label_seqs for l in ls])
+    num_classes = utils.numClasses([label for ls in true_label_seqs for label in ls])
 
     avg_accy = np.average(avg_accuracies, weights=true_label_seq_lens)
     chance = 1 / num_classes

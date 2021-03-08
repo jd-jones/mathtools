@@ -267,14 +267,16 @@ def makeDataSplits(
             cv_splitter = model_selection.LeaveOneOut()
         else:
             cv_splitter = model_selection.KFold(**kwargs)
-        splits = cv_splitter.split(data_indices)
+        splits = tuple(cv_splitter.split(data_indices))
     else:
-        groups = metadata[by_group].to_numpy()
+        col = metadata[by_group]
+        map_ = {item: i for i, item in enumerate(col.unique())}
+        groups = col.apply(lambda x: map_[x]).to_numpy()
         if not kwargs:
             cv_splitter = model_selection.LeaveOneGroupOut()
         else:
             cv_splitter = model_selection.GroupKFold(**kwargs)
-        splits = cv_splitter.split(data_indices, groups=groups)
+        splits = tuple(cv_splitter.split(data_indices, groups=groups))
 
     if val_ratio == 'group':
         def makeVal(i_train, i_test):
@@ -1147,8 +1149,21 @@ def makeSegmentLabels(label_seq):
     return seg_label_seq
 
 
+def check_all_eq(segment):
+    def check_eq(lhs, rhs):
+        is_eq = lhs == rhs
+        if isinstance(is_eq, np.ndarray):
+            is_eq = np.all(is_eq)
+        return is_eq
+
+    if isinstance(segment, np.ndarray):
+        return np.all(segment == segment[0])
+
+    return all(check_eq(x, segment[0]) for x in segment)
+
+
 def reduce_all_equal(segment):
-    if not np.all(segment == segment[0]):
+    if not check_all_eq(segment):
         raise AssertionError()
     return segment[0]
 
@@ -1309,6 +1324,20 @@ def countItems(items):
 
 
 # --=( NUMERICAL COMPUTATIONS )=-----------------------------------------------
+def slidingWindowSlices(data, win_size=1, stride=1):
+    num_samples = data.shape[0]
+    slices = tuple(
+        slice(i, i + win_size)
+        for i in range(0, num_samples, stride)
+    )
+    return slices
+
+
+def majorityVote(labels):
+    counts = makeHistogram(labels.max() + 1, labels.astype(int))
+    return counts.argmax().astype(labels)
+
+
 def firstMatchingIndex(array, values, check_single=True):
     if isinstance(values, np.ndarray):
         matching_indices = np.array([
@@ -1801,9 +1830,9 @@ def plot_multi(
         plt.close()
 
 
-def plot_array(inputs, labels, label_names, fn=None, tick_names=None, labels_together=False):
-    subplot_width = 12
-    subplot_height = 3
+def plot_array(
+        inputs, labels, label_names, fn=None, tick_names=None, labels_together=False,
+        subplot_width=12, subplot_height=3):
 
     if inputs is None:
         num_input_axes = 0
