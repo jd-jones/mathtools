@@ -228,7 +228,7 @@ def parse_config(cl_args, script_name=None):
 # -=( CROSS VALIDATION )==-----------------------------------------------------
 def makeDataSplits(
         dataset_size, val_ratio=None, precomputed_fn=None,
-        by_group=None, metadata=None,
+        by_group=None, group_folds=None, metadata=None,
         **kwargs):
     """ Splits data into cross-validation folds.
 
@@ -242,6 +242,10 @@ def makeDataSplits(
     by_group : string, optional
         Name of a metadata column that should be used to create group-level data splits.
         If this argument is passed, `metadata` is also required.
+    group_folds : iterable( iterable( object ) ), optional
+        This argument allows you to manually define group-level data splits by hand.
+        This could be useful if you already have a train/test/val group in the
+        metadata array (e.g. group_folds=[['train', 'val', 'test']]).
     metadata : pandas dataframe, shape (dataset_size, num_cols), optional
         Dataframe containing auxiliary data used in group-level data splits.
         For example, columns marking model and participant IDs can be used for
@@ -258,6 +262,14 @@ def makeDataSplits(
 
     if precomputed_fn is not None:
         splits = loadVariable(None, None, fn=os.path.expanduser(precomputed_fn))
+        return splits
+
+    if by_group is not None and group_folds is not None:
+        col = metadata[by_group].to_numpy()
+        splits = tuple(
+            tuple((col == val).nonzero()[0] for val in fold)
+            for fold in group_folds
+        )
         return splits
 
     data_indices = np.arange(dataset_size)
@@ -1129,6 +1141,14 @@ def computeSegments(seq):
     return tuple(segments), tuple(segment_lens)
 
 
+def genSegSlices(segment_lens):
+    start = 0
+    for seg_len in segment_lens:
+        end = start + seg_len
+        yield slice(start, end)
+        start = end
+
+
 def fromSegments(segments, segment_lens):
     seq = []
     for segment, length in zip(segments, segment_lens):
@@ -1324,18 +1344,25 @@ def countItems(items):
 
 
 # --=( NUMERICAL COMPUTATIONS )=-----------------------------------------------
-def slidingWindowSlices(data, win_size=1, stride=1):
+def slidingWindowSlices(data, win_size=1, stride=1, samples=None):
     num_samples = data.shape[0]
+
+    if samples is None:
+        samples = range(0, num_samples, stride)
+
     slices = tuple(
-        slice(i, i + win_size)
-        for i in range(0, num_samples, stride)
+        slice(
+            max(i - win_size // 2, 0),
+            min(i + win_size // 2 + 1, num_samples - 1)
+        )
+        for i in samples
     )
     return slices
 
 
 def majorityVote(labels):
     counts = makeHistogram(labels.max() + 1, labels.astype(int))
-    return counts.argmax().astype(labels)
+    return counts.argmax().astype(labels.dtype)
 
 
 def firstMatchingIndex(array, values, check_single=True):
