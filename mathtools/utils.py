@@ -1718,9 +1718,7 @@ def copyFile(file_path, dest_dir):
 
 
 class BaseCvDataset(object):
-    def __init__(
-            self, trial_ids, data_dir, metadata=None, vocab=None, label_fn_format=None,
-            prefix='trial='):
+    def __init__(self, trial_ids, data_dir, metadata=None, vocab=None, prefix='trial='):
         if metadata is None:
             metadata = loadMetadata(data_dir, rows=trial_ids)
         if vocab is None:
@@ -1736,36 +1734,12 @@ class BaseCvDataset(object):
     def num_states(self):
         return len(self.vocab)
 
-    def loadAll(self, seq_ids, var_name, from_dir, prefix=None):
-        if prefix is None:
-            prefix = self.prefix
-
-        all_data = tuple(
-            loadVariable(f"{prefix}{seq_id}_{var_name}", from_dir)
-            for seq_id in seq_ids
-        )
-        return all_data
-
-    def getFold(self, cv_fold):
-        return tuple(self.getSplit(split) for split in cv_fold)
-
-    def getSplit(self, split_idxs):
-        split_data = tuple(
-            tuple(s[i] for i in split_idxs)
-            for s in (self.label_seqs, self.trial_ids)
-        )
-        return split_data
-
 
 class FeaturelessCvDataset(BaseCvDataset):
     def __init__(self, trial_ids, data_dir, label_fn_format=None, **super_kwargs):
         super().__init__(trial_ids, data_dir, **super_kwargs)
 
         self.label_seqs = self._load_labels(label_fn_format)
-
-    @property
-    def num_states(self):
-        return len(self.vocab)
 
     def _load_labels(self, label_fn_format):
         return self.loadAll(self.trial_ids, label_fn_format, self.data_dir)
@@ -1882,7 +1856,8 @@ def plot_array(
         if inputs.ndim == 1:
             axes[-1].plot(inputs)
         else:
-            axes[-1].imshow(inputs, interpolation='none', aspect='auto')
+            # axes[-1].imshow(inputs, interpolation='none', aspect='auto')
+            axes[-1].pcolormesh(inputs)
         axes[-1].set_ylabel('Input')
 
     min_val = min(label.min() for label in labels)

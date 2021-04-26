@@ -37,6 +37,24 @@ def confusionMatrix(all_pred_seqs, all_true_seqs, vocab_size):
     return confusions
 
 
+def scoreConfusionMatrix(all_score_seqs, all_true_seqs, vocab_size):
+    """
+    Returns
+    -------
+    confusions: np.ndarray of int, shape (vocab_size, vocab_size)
+        Rows represent predicted labels; columns represent true labels.
+    """
+
+    confusions = np.full((vocab_size, vocab_size), -np.inf, dtype=float)
+
+    for score_seq, true_seq in zip(all_score_seqs, all_true_seqs):
+        for score_row, i_true in zip(score_seq, true_seq):
+            for i_pred, score in enumerate(score_row):
+                confusions[i_pred, i_true] = np.logaddexp(confusions[i_pred, i_true], score)
+
+    return confusions
+
+
 def perClassAcc(confusions, return_counts=False):
     class_counts = confusions.sum(axis=0)
     per_class_acc = np.diag(confusions) / class_counts
@@ -45,26 +63,29 @@ def perClassAcc(confusions, return_counts=False):
     return per_class_acc
 
 
-def plotConfusions(fn, confusions, vocab):
-    plt.figure(figsize=(24, 24))
+def plotConfusions(fn, confusions, vocab, size=24, disp_counts=False):
+    plt.figure(figsize=(size, size))
 
-    vmax = np.abs(confusions).max()
-    plt.matshow(confusions, cmap='coolwarm', vmin=-vmax, vmax=vmax)
+    # vmax = np.abs(confusions).max()
+    # plt.matshow(confusions, cmap='coolwarm', vmin=-vmax, vmax=vmax)
+    plt.matshow(confusions)
 
-    for i_row, row in enumerate(confusions):
-        for i_col, val in enumerate(row):
-            if not val:
-                continue
-            plt.text(
-                i_col, i_row, val,
-                fontsize=8, color='black', ha='center', va='center'
-            )
+    if disp_counts:
+        for i_row, row in enumerate(confusions):
+            for i_col, val in enumerate(row):
+                if not val:
+                    continue
+                plt.text(
+                    i_col, i_row, val,
+                    fontsize=8, color='black', ha='center', va='center'
+                )
 
     plt.xticks(ticks=range(len(vocab)), labels=vocab, rotation='vertical')
     plt.yticks(ticks=range(len(vocab)), labels=vocab)
     plt.colorbar()
 
     plt.savefig(fn, bbox_inches='tight')
+    plt.close()
 
 
 def plotPerClassAcc(fn, vocab, per_class_acc, class_preds, class_counts):
