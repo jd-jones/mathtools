@@ -1833,7 +1833,7 @@ def plot_multi(
 
 def plot_array(
         inputs, labels, label_names, fn=None, tick_names=None, labels_together=False,
-        subplot_width=12, subplot_height=3):
+        subplot_width=12, subplot_height=3, title=None):
 
     if inputs is None:
         num_input_axes = 0
@@ -1878,6 +1878,9 @@ def plot_array(
         if labels_together:
             axis.legend()
         axis.set_ylabel(label_name)
+
+    if title is not None:
+        axes[0].set_title(title)
 
     plt.tight_layout()
     if fn is None:
