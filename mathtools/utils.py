@@ -304,8 +304,9 @@ def makeDataSplits(
     elif val_ratio is not None:
         def makeVal(i_train, i_test):
             num_val = roundToInt(val_ratio * len(i_train))
-            i_val = i_train[:num_val]
-            i_train = i_train[num_val:]
+            np.random.shuffle(i_train)
+            i_val = np.sort(i_train[:num_val])
+            i_train = np.sort(i_train[num_val:])
             return i_train, i_val, i_test
         splits = tuple(makeVal(i_train, i_test) for i_train, i_test in splits)
 
