@@ -323,43 +323,43 @@ class Accuracy(ConfusionPerformanceMetric):
         return self.name + ': ' + super().__str__()
 
 
-def truePositives(predicted, true):
+def truePositives(predicted, true, background_index=0):
     if isinstance(predicted, torch.Tensor) and isinstance(true, torch.Tensor):
-        pred_is_positive = predicted != 0
+        pred_is_positive = predicted != background_index
         true_positives = predicted[pred_is_positive] == true[pred_is_positive]
         return true_positives.sum().float()
     if isinstance(predicted, np.ndarray) and isinstance(true, np.ndarray):
-        pred_is_positive = predicted != 0
+        pred_is_positive = predicted != background_index
         true_positives = predicted[pred_is_positive] == true[pred_is_positive]
         return true_positives.sum().astype(float)
     try:
-        return sum(p == t for p, t in zip(predicted, true) if t)
+        return sum(p == t for p, t in zip(predicted, true) if t != background_index)
     except TypeError:
-        return int(predicted == true) if true else 0
+        return int(predicted == true) if true != background_index else 0
 
 
-def trueNegatives(predicted, true):
+def trueNegatives(predicted, true, background_index=0):
     if isinstance(predicted, torch.Tensor) and isinstance(true, torch.Tensor):
-        pred_is_negative = predicted == 0
+        pred_is_negative = predicted == background_index
         true_negatives = predicted[pred_is_negative] == true[pred_is_negative]
         return true_negatives.sum().float()
     if isinstance(predicted, np.ndarray) and isinstance(true, np.ndarray):
-        pred_is_negative = predicted == 0
+        pred_is_negative = predicted == background_index
         true_negatives = predicted[pred_is_negative] == true[pred_is_negative]
         return true_negatives.sum().astype(float)
     try:
-        return sum(p == t for p, t in zip(predicted, true) if not t)
+        return sum(p == t for p, t in zip(predicted, true) if t == background_index)
     except TypeError:
-        return int(predicted == true) if not true else 0
+        return int(predicted == true) if true == background_index else 0
 
 
-def falsePositives(predicted, true):
+def falsePositives(predicted, true, background_index=0):
     if isinstance(predicted, torch.Tensor) and isinstance(true, torch.Tensor):
-        pred_is_positive = predicted != 0
+        pred_is_positive = predicted != background_index
         false_positives = predicted[pred_is_positive] != true[pred_is_positive]
         return false_positives.sum().float()
     if isinstance(predicted, np.ndarray) and isinstance(true, np.ndarray):
-        pred_is_positive = predicted != 0
+        pred_is_positive = predicted != background_index
         false_positives = predicted[pred_is_positive] != true[pred_is_positive]
         return false_positives.sum().astype(float)
     try:
@@ -368,19 +368,19 @@ def falsePositives(predicted, true):
         return int(predicted != true) if true else 0
 
 
-def falseNegatives(predicted, true):
+def falseNegatives(predicted, true, background_index=0):
     if isinstance(predicted, torch.Tensor) and isinstance(true, torch.Tensor):
-        pred_is_negative = predicted == 0
+        pred_is_negative = predicted == background_index
         false_negatives = predicted[pred_is_negative] != true[pred_is_negative]
         return false_negatives.sum().float()
     if isinstance(predicted, np.ndarray) and isinstance(true, np.ndarray):
-        pred_is_negative = predicted == 0
+        pred_is_negative = predicted == background_index
         false_negatives = predicted[pred_is_negative] != true[pred_is_negative]
         return false_negatives.sum().astype(float)
     try:
-        return sum(p != t for p, t in zip(predicted, true) if not t)
+        return sum(p != t for p, t in zip(predicted, true) if t == background_index)
     except TypeError:
-        return int(predicted != true) if not true else 0
+        return int(predicted != true) if true == background_index else 0
 
 
 def classAccuracy(true_label_seqs, predicted_label_seqs):

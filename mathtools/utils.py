@@ -1664,6 +1664,7 @@ def loadVariable(var_name, from_dir, fn=None):
             var = json.load(file_)
     else:
         err_str = f'Unrecognized file extension: {ext}'
+        raise AssertionError(err_str)
     return var
 
 

@@ -54,7 +54,7 @@ def selectDevice(gpu_dev_id):
         os.environ["CUDA_VISIBLE_DEVICES"] = gpu_dev_id
 
     num_visible_gpus = torch.cuda.device_count()
-    if num_visible_gpus > 0:
+    if num_visible_gpus > 0 or gpu_dev_id != 'cpu':
         device = torch.device('cuda')
         device_name = torch.cuda.get_device_name(device)
     else:
